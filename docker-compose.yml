@@ -6,17 +6,17 @@ services:
     container_name: mik-edu-backend
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "8000:8000"
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=8000
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       - UPLOAD_DIR=/app/uploads
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/uploads
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/auth/login" ]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/api/auth/login" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -29,7 +29,7 @@ services:
     container_name: mik-edu-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "3000:3000"
     depends_on:
       backend:
         condition: service_healthy
