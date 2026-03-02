@@ -7,6 +7,8 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 
+RUN apk add --no-cache curl
+
 COPY . .
 
 RUN mkdir -p data uploads
