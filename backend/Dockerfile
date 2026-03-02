@@ -11,9 +11,9 @@ COPY . .
 
 RUN mkdir -p data uploads
 
-EXPOSE 3001
+EXPOSE 8000
 
 ENV NODE_ENV=production
-ENV PORT=3001
+ENV PORT=8000
 
 CMD ["node", "server.js"]
