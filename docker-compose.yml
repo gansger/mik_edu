@@ -16,7 +16,7 @@ services:
       - backend_data:/app/data
       - backend_uploads:/app/uploads
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/api/auth/login" ]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 3
