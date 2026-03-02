@@ -26,15 +26,7 @@ const useSqlite = !process.env.DATABASE_URL || process.env.DATABASE_URL.startsWi
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-app.get('/health', async (req, res) => {
-  try {
-    // Для sqlite может отличаться, но SELECT 1 обычно ок для многих драйверов
-    await pool.query?.('SELECT 1');
-    return res.status(200).json({ status: 'ok', db: 'ok' });
-  } catch (e) {
-    return res.status(500).json({ status: 'error', db: 'fail', message: e.message });
-  }
-});
+app.get('/health', (req, res) => res.status(200).send('ok'));
 
 app.use('/api/auth', auth);
 app.use('/api/users', users);
