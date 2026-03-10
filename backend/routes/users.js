@@ -74,6 +74,64 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Массовое добавление: { users: [ { login, password, fullName, role, groupId } ] }. groupId — id группы или не указан для admin/teacher.
+router.post('/bulk', async (req, res) => {
+  const { users: raw } = req.body;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return res.status(400).json({ error: 'Передайте массив users: [{ login, password, fullName, role, groupId }]' });
+  }
+  const groups = await pool.query('SELECT id, name FROM groups');
+  const groupByName = new Map(groups.rows.map((g) => [g.name.toLowerCase().trim(), g.id]));
+  const created = [];
+  const errors = [];
+  for (let i = 0; i < raw.length; i++) {
+    const row = raw[i];
+    const login = row.login?.toString().trim();
+    const password = row.password?.toString();
+    const fullName = row.fullName != null ? String(row.fullName).trim() : (row.full_name != null ? String(row.full_name).trim() : '');
+    let role = (row.role || 'student').toString().toLowerCase().trim();
+    if (role === 'админ' || role === 'admin') role = 'admin';
+    if (role === 'преподаватель' || role === 'teacher') role = 'teacher';
+    if (role === 'студент' || role === 'student') role = 'student';
+    if (!login || !password) {
+      errors.push({ row: i + 1, login: login || '(пусто)', error: 'Нужны логин и пароль' });
+      continue;
+    }
+    if (!['admin', 'student', 'teacher'].includes(role)) {
+      errors.push({ row: i + 1, login, error: 'Роль: admin, student или teacher' });
+      continue;
+    }
+    let groupId = row.groupId != null ? row.groupId : null;
+    if (role === 'student') {
+      if (groupId == null && row.group != null) {
+        const gName = String(row.group).trim().toLowerCase();
+        groupId = groupByName.get(gName) ?? null;
+      }
+      if (groupId == null && row.groupName != null) {
+        const gName = String(row.groupName).trim().toLowerCase();
+        groupId = groupByName.get(gName) ?? null;
+      }
+      if (!groupId) {
+        errors.push({ row: i + 1, login, error: 'Для студента укажите группу (groupId или group)' });
+        continue;
+      }
+    }
+    try {
+      const hash = await bcrypt.hash(password, 10);
+      const r = await pool.query(
+        `INSERT INTO users (login, password_hash, role, full_name, group_id)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id, login, role, full_name, group_id`,
+        [login, hash, role, fullName || null, role === 'student' ? groupId : null]
+      );
+      created.push(r.rows[0]);
+    } catch (e) {
+      if (e.code === '23505') errors.push({ row: i + 1, login, error: 'Логин уже занят' });
+      else errors.push({ row: i + 1, login, error: e.message || 'Ошибка' });
+    }
+  }
+  res.status(201).json({ created: created.length, errors, users: created });
+});
+
 router.patch('/:id', async (req, res) => {
   const { id } = req.params;
   const { password, fullName, groupId, assignments } = req.body;

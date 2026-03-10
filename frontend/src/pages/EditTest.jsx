@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 
-const EXPECTED_QUESTIONS = 10;
-
 export default function EditTest() {
   const { id } = useParams();
   const [test, setTest] = useState(null);
@@ -11,6 +9,9 @@ export default function EditTest() {
   const [saving, setSaving] = useState({});
   const [newOptionText, setNewOptionText] = useState({});
   const [newOptionCorrect, setNewOptionCorrect] = useState({});
+  const [newQuestionText, setNewQuestionText] = useState('');
+  const [newQuestionPoints, setNewQuestionPoints] = useState(1);
+  const [addQuestionSaving, setAddQuestionSaving] = useState(false);
 
   useEffect(() => {
     api.get(`/tests/${id}`)
@@ -56,23 +57,47 @@ export default function EditTest() {
       .catch((err) => alert(err.error));
   };
 
+  const addQuestion = (e) => {
+    e.preventDefault();
+    if (!newQuestionText.trim()) return;
+    setAddQuestionSaving(true);
+    api.post(`/tests/${id}/questions`, { text: newQuestionText.trim(), points: newQuestionPoints || 1 })
+      .then(() => {
+        setNewQuestionText('');
+        setNewQuestionPoints(1);
+        return api.get(`/tests/${id}`);
+      })
+      .then((r) => setTest(r.data))
+      .catch((err) => alert(err.error || 'Ошибка'))
+      .finally(() => setAddQuestionSaving(false));
+  };
+
+  const removeQuestion = (qid) => {
+    if (!confirm('Удалить вопрос и все варианты ответов?')) return;
+    setSaving((s) => ({ ...s, [`q-${qid}`]: true }));
+    api.delete(`/tests/questions/${qid}`)
+      .then(() => api.get(`/tests/${id}`))
+      .then((r) => setTest(r.data))
+      .catch((err) => alert(err.error))
+      .finally(() => setSaving((s) => ({ ...s, [`q-${qid}`]: false })));
+  };
+
   if (loading) return <div className="content">Загрузка...</div>;
   if (!test) return <div className="content"><p className="empty-state">Тест не найден.</p><Link to="/groups" className="btn btn-secondary">← К группам</Link></div>;
 
   const questions = test.questions || [];
-  const hasAll10 = questions.length >= EXPECTED_QUESTIONS;
 
   return (
     <div className="content">
       <Link to="/groups" className="btn btn-secondary" style={{ marginBottom: '1rem' }}>← К группам</Link>
       <div className="card">
         <h1 className="page-title" style={{ marginTop: 0 }}>Редактирование теста: {test.title}</h1>
-        {!hasAll10 && <p className="empty-state" style={{ padding: '0.5rem 0' }}>В тесте должно быть 10 вопросов. Сейчас: {questions.length}. Добавьте вопросы в админке или создайте тест заново с кнопкой «Создать (10 вопросов)».</p>}
-        {questions.slice(0, EXPECTED_QUESTIONS).map((q, idx) => (
+        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Вопросов: {questions.length}. Добавьте вопросы и варианты ответов ниже.</p>
+        {questions.map((q, idx) => (
           <div key={q.id} className="card edit-test-question" style={{ background: 'var(--bg)', marginBottom: '1rem' }}>
-            <div className="edit-q-header">
-              <strong>Вопрос {idx + 1}</strong>
-              <span className="test-points">({q.points} б.)</span>
+            <div className="edit-q-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <span><strong>Вопрос {idx + 1}</strong> <span className="test-points">({q.points} б.)</span></span>
+              <button type="button" className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} onClick={() => removeQuestion(q.id)} disabled={!!saving[`q-${q.id}`]}>Удалить вопрос</button>
             </div>
             <div className="form-group">
               <input
@@ -109,9 +134,22 @@ export default function EditTest() {
             </form>
           </div>
         ))}
-        {questions.length < EXPECTED_QUESTIONS && questions.length > 0 && (
-          <p className="empty-state">Добавьте ещё вопросов в разделе «Тестирование» (админ) до 10.</p>
-        )}
+        <div className="card" style={{ background: 'var(--surface-hover)', marginTop: '1rem' }}>
+          <h3 style={{ marginTop: 0, marginBottom: '0.75rem' }}>Добавить вопрос</h3>
+          <form onSubmit={addQuestion} className="add-inline-form" style={{ flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-end' }}>
+            <input
+              placeholder="Текст вопроса"
+              value={newQuestionText}
+              onChange={(e) => setNewQuestionText(e.target.value)}
+              style={{ minWidth: 200, flex: 1 }}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              Баллы:
+              <input type="number" min={1} value={newQuestionPoints} onChange={(e) => setNewQuestionPoints(parseInt(e.target.value, 10) || 1)} style={{ width: 60 }} />
+            </label>
+            <button type="submit" className="btn btn-primary" disabled={addQuestionSaving || !newQuestionText.trim()}>{addQuestionSaving ? 'Добавление...' : 'Добавить вопрос'}</button>
+          </form>
+        </div>
       </div>
     </div>
   );

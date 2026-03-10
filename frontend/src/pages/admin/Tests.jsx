@@ -42,7 +42,7 @@ export default function AdminTests() {
   const createTest = (e) => {
     e.preventDefault();
     if (!moduleId || !title.trim()) return;
-    api.post('/tests', { moduleId: parseInt(moduleId, 10), title: title.trim(), createTenQuestions: true })
+    api.post('/tests', { moduleId: parseInt(moduleId, 10), title: title.trim() })
       .then((r) => {
         setTitle('');
         const testId = r.data?.id;
@@ -124,12 +124,12 @@ export default function AdminTests() {
       {moduleId && (
         <>
           <form onSubmit={createTest} className="card" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ marginTop: 0 }}>Добавить тест в модуль (10 вопросов)</h3>
+            <h3 style={{ marginTop: 0 }}>Добавить тест в модуль</h3>
             <div className="form-group" style={{ maxWidth: 400 }}>
               <label>Название теста</label>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название" />
             </div>
-            <button type="submit" className="btn btn-primary">Создать тест (10 вопросов)</button>
+            <button type="submit" className="btn btn-primary">Создать тест</button>
           </form>
 
           <div className="card" style={{ marginBottom: '1.5rem' }}>

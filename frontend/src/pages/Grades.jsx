@@ -8,6 +8,7 @@ export default function Grades() {
   const [loading, setLoading] = useState(true);
   const [assignments, setAssignments] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [subjectId, setSubjectId] = useState('');
   const isTeacher = user?.role === 'teacher';
   const isStudent = user?.role === 'student';
 
@@ -30,9 +31,11 @@ export default function Grades() {
 
   useEffect(() => {
     if (!isTeacher || !selectedGroupId) return;
+    setSubjectId('');
     setLoading(true);
+    const params = new URLSearchParams({ groupId: selectedGroupId });
     api
-      .get(`/grades/journal-structure?groupId=${selectedGroupId}`)
+      .get(`/grades/journal-structure?${params}`)
       .then((r) => setStructure(r.data))
       .catch(() => setStructure(null))
       .finally(() => setLoading(false));
@@ -46,7 +49,17 @@ export default function Grades() {
     acc[key].modules.push(col);
     return acc;
   }, {}) || {};
-  const subjectList = Object.values(columnsBySubject);
+  const allSubjectList = Object.values(columnsBySubject);
+  const subjectList = subjectId
+    ? allSubjectList.filter((s) => s.modules[0] && String(s.modules[0].subjectId) === String(subjectId))
+    : allSubjectList;
+  const subjectsForSelect = structure?.subjects || (structure?.columns ? [...new Map(structure.columns.map((c) => [c.subjectId, { id: c.subjectId, name: c.subjectName }])).values()] : []);
+
+  const avg = (scores) => {
+    const nums = scores.filter((n) => n != null && !Number.isNaN(Number(n)));
+    if (!nums.length) return null;
+    return (nums.reduce((a, b) => a + Number(b), 0) / nums.length).toFixed(1);
+  };
 
   if (isTeacher && !selectedGroupId && uniqueGroups.length > 0) {
     return (
@@ -78,9 +91,29 @@ export default function Grades() {
 
   if (isStudent) {
     const hasColumns = structure?.columns?.length > 0;
+    const studentScores = subjectList.flatMap((sub) =>
+      sub.modules.map((col) => (col.testId ? structure.gradeMap[col.testId] : null))
+    );
+    const studentAvg = avg(studentScores);
     return (
       <>
         <h1 className="page-title">Моя успеваемость</h1>
+        <p className="text-muted" style={{ marginBottom: '1rem' }}>
+          Оценки выставляются автоматически по тестам: 0–39,9% → 2, 40–59,9% → 3, 60–79,9% → 4, 80–100% → 5.
+        </p>
+        {hasColumns && subjectsForSelect.length > 0 && (
+          <div className="card journal-filters" style={{ marginBottom: '1rem' }}>
+            <div className="form-group" style={{ maxWidth: 280 }}>
+              <label>Предмет</label>
+              <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+                <option value="">— Все предметы —</option>
+                {subjectsForSelect.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
         <div className="card">
           {!hasColumns ? (
             <p className="empty-state">Пока нет предметов и модулей с тестами в вашей группе.</p>
@@ -95,6 +128,7 @@ export default function Grades() {
                         {sub.name}
                       </th>
                     ))}
+                    <th rowSpan={2} className="journal-avg-col">В среднем</th>
                   </tr>
                   <tr>
                     <th className="journal-col-student"></th>
@@ -123,6 +157,7 @@ export default function Grades() {
                         );
                       })
                     )}
+                    <td className="journal-cell journal-avg-cell">{studentAvg != null ? studentAvg : '—'}</td>
                   </tr>
                 </tbody>
               </table>
@@ -136,11 +171,25 @@ export default function Grades() {
   if (isTeacher && structure) {
     const hasStudents = structure.students?.length > 0;
     const hasColumns = structure.columns?.length > 0;
+    const subjectAvgs = subjectList.map((sub) => {
+      const scores = [];
+      structure.students?.forEach((stu) => {
+        sub.modules.forEach((col) => {
+          const v = col.testId ? structure.gradeMap[`${stu.id}-${col.testId}`] : null;
+          if (v != null && !Number.isNaN(Number(v))) scores.push(Number(v));
+        });
+      });
+      return avg(scores);
+    });
+    const overallAvg = avg(subjectAvgs.filter((a) => a != null));
     return (
       <>
         <h1 className="page-title">Успеваемость группы</h1>
+        <p className="text-muted" style={{ marginBottom: '1rem' }}>
+          Оценки выставляются автоматически по тестам: 0–39,9% → 2, 40–59,9% → 3, 60–79,9% → 4, 80–100% → 5.
+        </p>
         {uniqueGroups.length > 0 && (
-          <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <div className="card journal-filters" style={{ marginBottom: '1.5rem' }}>
             <div className="form-group" style={{ maxWidth: 300 }}>
               <label>Группа</label>
               <select value={selectedGroupId} onChange={(e) => setSelectedGroupId(e.target.value)}>
@@ -150,6 +199,17 @@ export default function Grades() {
                 ))}
               </select>
             </div>
+            {hasColumns && subjectsForSelect.length > 0 && (
+              <div className="form-group" style={{ maxWidth: 280 }}>
+                <label>Предмет</label>
+                <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+                  <option value="">— Все предметы —</option>
+                  {subjectsForSelect.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
         <div className="card">
@@ -168,6 +228,7 @@ export default function Grades() {
                         {sub.name}
                       </th>
                     ))}
+                    <th rowSpan="2" className="journal-avg-col">Средний балл</th>
                   </tr>
                   <tr>
                     {subjectList.map((sub) =>
@@ -180,25 +241,41 @@ export default function Grades() {
                   </tr>
                 </thead>
                 <tbody>
-                  {structure.students.map((stu) => (
-                    <tr key={stu.id}>
-                      <td className="journal-col-student">
-                        <span className="journal-student-name">{stu.fullName || stu.login}</span>
-                        <span className="journal-student-login">{stu.login}</span>
+                  {structure.students.map((stu) => {
+                    const rowScores = subjectList.flatMap((sub) =>
+                      sub.modules.map((col) => (col.testId ? structure.gradeMap[`${stu.id}-${col.testId}`] : null))
+                    );
+                    const rowAvg = avg(rowScores);
+                    return (
+                      <tr key={stu.id}>
+                        <td className="journal-col-student">
+                          <span className="journal-student-name">{stu.fullName || stu.login}</span>
+                          <span className="journal-student-login">{stu.login}</span>
+                        </td>
+                        {subjectList.map((sub) =>
+                          sub.modules.map((col) => {
+                            const key = `${stu.id}-${col.testId}`;
+                            const score = col.testId ? structure.gradeMap[key] : null;
+                            return (
+                              <td key={`${stu.id}-${col.moduleId}`} className="journal-cell">
+                                {score != null ? score : '—'}
+                              </td>
+                            );
+                          })
+                        )}
+                        <td className="journal-cell journal-avg-cell">{rowAvg != null ? rowAvg : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="journal-avg-row">
+                    <td className="journal-col-student text-muted">Средний по предмету</td>
+                    {subjectList.map((sub) => (
+                      <td key={sub.modules[0]?.subjectId} colSpan={sub.modules.length} className="journal-cell journal-avg-cell">
+                        {subjectAvgs[subjectList.indexOf(sub)] ?? '—'}
                       </td>
-                      {subjectList.map((sub) =>
-                        sub.modules.map((col) => {
-                          const key = `${stu.id}-${col.testId}`;
-                          const score = col.testId ? structure.gradeMap[key] : null;
-                          return (
-                            <td key={`${stu.id}-${col.moduleId}`} className="journal-cell">
-                              {score != null ? score : '—'}
-                            </td>
-                          );
-                        })
-                      )}
-                    </tr>
-                  ))}
+                    ))}
+                    <td className="journal-cell journal-avg-cell">{overallAvg ?? '—'}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>

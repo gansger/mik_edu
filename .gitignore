@@ -8,6 +8,13 @@ frontend/node_modules/
 *.env.local
 *.env.production
 
+# === SSH и секретные ключи (НЕ коммитить!) ===
+Gabriel
+Gabriel.pub
+*.pem
+id_rsa
+id_ed25519
+
 # === Сборки и билды ===
 dist/
 build/

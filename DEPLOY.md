@@ -2,6 +2,8 @@
 
 Инструкция по развёртыванию проекта на сервере (VPS, выделенный сервер и т.п.).
 
+**Порты:** фронтенд — **3000**, бэкенд (API) — **8000**.
+
 ---
 
 ## Требования
@@ -64,7 +66,7 @@ cp .env.example .env
 
 | Переменная      | Описание |
 |-----------------|----------|
-| `PORT`          | Порт сервера (по умолчанию 3001) |
+| `PORT`          | Порт сервера (по умолчанию 8000) |
 | `JWT_SECRET`    | Секретный ключ для JWT (обязательно смените в проде) |
 | `DATABASE_URL`  | Не задавать или `sqlite://` — использовать SQLite. Для PostgreSQL: `postgresql://user:password@host:5432/dbname` |
 | `UPLOAD_DIR`    | Папка загрузок лекций (по умолчанию `./uploads`) |
@@ -73,7 +75,7 @@ cp .env.example .env
 **Пример .env для хостинга с SQLite:**
 
 ```env
-PORT=3001
+PORT=8000
 JWT_SECRET=ваш-длинный-секретный-ключ-для-продакшена
 UPLOAD_DIR=./uploads
 ```
@@ -81,7 +83,7 @@ UPLOAD_DIR=./uploads
 **Пример для PostgreSQL:**
 
 ```env
-PORT=3001
+PORT=8000
 JWT_SECRET=ваш-длинный-секретный-ключ
 DATABASE_URL=postgresql://user:password@localhost:5432/mik_edu
 UPLOAD_DIR=./uploads
@@ -109,7 +111,7 @@ cd backend
 npm start
 ```
 
-Сайт и API будут доступны по адресу **http://хост:3001** (или по выбранному порту).
+Сайт и API будут доступны по адресу **http://хост:8000** (или по выбранному порту).
 
 Для постоянной работы в фоне используйте **pm2**:
 
@@ -125,19 +127,19 @@ pm2 startup
 
 ## Вариант 2: Backend и frontend отдельно
 
-Backend на одном порту, фронтенд (Vite или nginx) на другом. Удобно при разработке или когда фронт отдаёт nginx.
+Backend на порту 8000, фронтенд на порту 3000. Удобно при разработке или когда фронт отдаёт nginx.
 
 ### Backend
 
 ```bash
 cd backend
 npm ci
-# создать и заполнить .env
+# создать и заполнить .env (PORT=8000)
 npm run init-db   # при необходимости
 npm start
 ```
 
-API: `http://хост:3001`
+API: **http://хост:8000**
 
 ### Frontend (режим разработки)
 
@@ -147,7 +149,7 @@ npm ci
 npm run dev
 ```
 
-В `frontend/vite.config.js` указан proxy `/api` → `http://localhost:3001`. Сайт: `http://localhost:5173`.
+В `frontend/vite.config.js` указан proxy `/api` → `http://localhost:8000`. Сайт: **http://localhost:3000**.
 
 ### Frontend (сборка под nginx)
 
@@ -157,11 +159,11 @@ npm ci
 npm run build
 ```
 
-Раздавайте папку `frontend/dist` через nginx. В конфиге nginx прокинуть запросы с `/api` на backend:
+Раздавайте папку `frontend/dist` через nginx на порту 3000. В конфиге nginx прокинуть запросы с `/api` на backend:
 
 ```nginx
 location /api {
-    proxy_pass http://127.0.0.1:3001;
+    proxy_pass http://127.0.0.1:8000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -176,9 +178,24 @@ location / {
 
 ---
 
+## Вариант 3: Docker Compose
+
+В корне проекта:
+
+```bash
+docker compose up -d --build
+```
+
+- **Фронтенд:** http://localhost:3000  
+- **Бэкенд (API):** http://localhost:8000  
+
+Фронтенд-контейнер проксирует запросы `/api` на бэкенд, поэтому приложение можно открывать по одному адресу: **http://localhost:3000**.
+
+---
+
 ## Проверка после запуска
 
-1. Открыть в браузере: `http://ваш-хост:3001` (при Варианте 1) или адрес фронтенда (при Варианте 2).
+1. Открыть в браузере: **http://ваш-хост:8000** (Вариант 1) или **http://ваш-хост:3000** (Вариант 2 или 3).
 2. Войти: логин **admin**, пароль **admin** (если не меняли после `init-db`).
 3. Сразу сменить пароль администратора в разделе «Пользователи» (ФИО / пароль).
 

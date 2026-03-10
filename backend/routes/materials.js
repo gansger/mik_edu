@@ -51,6 +51,20 @@ router.get('/tree', authRequired, async (req, res) => {
     group: groups.rows[0],
     subjects: [],
   };
+  // Один запрос по всем попыткам студента — используем при сборке дерева
+  let studentAttemptsByTest = {};
+  if (req.role === 'student') {
+    const grades = await pool.query(
+      'SELECT test_id, COUNT(*) as cnt FROM grades WHERE user_id = $1 AND test_id IS NOT NULL GROUP BY test_id',
+      [req.userId]
+    );
+    for (const r of grades.rows) {
+      const tid = r.test_id != null ? String(r.test_id) : null;
+      const cnt = Number(r.cnt ?? r.CNT ?? 0);
+      if (tid != null) studentAttemptsByTest[tid] = cnt;
+    }
+  }
+  const MAX_ATTEMPTS = 1;
   for (const sub of subjects.rows) {
     const modules = await pool.query(
       'SELECT id, name, order_index FROM modules WHERE subject_id = $1 ORDER BY order_index, id',
@@ -65,6 +79,15 @@ router.get('/tree', authRequired, async (req, res) => {
             pool.query('SELECT id, title, file_type, order_index FROM lectures WHERE module_id = $1 ORDER BY order_index, id', [mod.id]),
             pool.query('SELECT id, title FROM tests WHERE module_id = $1 ORDER BY id', [mod.id]),
           ]);
+          let testsList = tests.rows.map((t) => {
+            const base = { id: t.id, title: t.title };
+            if (req.role === 'student') {
+              const attemptsUsed = studentAttemptsByTest[String(t.id)] ?? 0;
+              const attemptsLeft = Math.max(0, MAX_ATTEMPTS - attemptsUsed);
+              return { ...base, attemptsUsed, attemptsLeft };
+            }
+            return base;
+          });
           return {
             id: mod.id,
             name: mod.name,
@@ -75,7 +98,7 @@ router.get('/tree', authRequired, async (req, res) => {
               fileType: l.file_type,
               orderIndex: l.order_index,
             })),
-            tests: tests.rows.map((t) => ({ id: t.id, title: t.title })),
+            tests: testsList,
           };
         })
       ),

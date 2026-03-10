@@ -5,8 +5,10 @@ import { api, lectureFileUrl } from '../api';
 export default function StudentMaterials() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [subjectId, setSubjectId] = useState('');
 
   useEffect(() => {
+    setLoading(true);
     api
       .get('/materials/tree')
       .then((r) => setData(r.data))
@@ -25,21 +27,37 @@ export default function StudentMaterials() {
   }
 
   const { group, subjects } = data;
-  const hasContent = subjects?.some((s) => s.modules?.some((m) => (m.lectures?.length || 0) + (m.tests?.length || 0) > 0));
+  const filteredSubjects = subjectId
+    ? subjects?.filter((s) => String(s.id) === String(subjectId)) || []
+    : subjects || [];
+  const hasContent = filteredSubjects?.some((s) => s.modules?.some((m) => (m.lectures?.length || 0) + (m.tests?.length || 0) > 0));
 
   return (
     <div className="content">
       <h1 className="page-title">Материалы — {group.name}</h1>
-      <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
         Предметы, модули, лекции и тесты вашей группы.
       </p>
+      {subjects?.length > 0 && (
+        <div className="form-group" style={{ marginBottom: '1.5rem', maxWidth: 320 }}>
+          <label>Предмет</label>
+          <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+            <option value="">Все предметы</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
       {!subjects?.length ? (
         <p className="empty-state">Нет предметов в вашей группе.</p>
+      ) : subjectId && !filteredSubjects.length ? (
+        <p className="empty-state">Предмет не найден.</p>
       ) : !hasContent ? (
         <p className="empty-state">Пока нет лекций и тестов. Материалы появятся после добавления преподавателем.</p>
       ) : (
         <div className="materials-tree">
-          {subjects.map((sub) => (
+          {filteredSubjects.map((sub) => (
             <div key={sub.id} className="card">
               <h3 style={{ marginTop: 0 }}>{sub.name}</h3>
               {sub.modules?.map((mod) => (
@@ -56,9 +74,16 @@ export default function StudentMaterials() {
                     ))}
                     {(mod.tests || []).map((t) => (
                       <li key={`t-${t.id}`}>
-                        <Link to={`/test/${t.id}`} className="test-link">
-                          📝 {t.title} <span className="file-type-badge">тест</span>
-                        </Link>
+                        {(t.attemptsLeft != null && t.attemptsLeft === 0) || (t.attemptsUsed != null && t.attemptsUsed >= 1) ? (
+                          <span className="test-link test-closed">
+                            📝 {t.title} <span className="file-type-badge">тест</span>
+                            <span className="closed-badge"> — доступ закрыт</span>
+                          </span>
+                        ) : (
+                          <Link to={`/test/${t.id}`} className="test-link">
+                            📝 {t.title} <span className="file-type-badge">тест</span>
+                          </Link>
+                        )}
                       </li>
                     ))}
                   </ul>

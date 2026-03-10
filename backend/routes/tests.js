@@ -21,26 +21,16 @@ router.get('/', authRequired, async (req, res) => {
   res.json(r.rows);
 });
 
-// Создать тест (админ или преподаватель по модулю). Если createTenQuestions — 10 вопросов.
-const QUESTIONS_PER_TEST = 10;
+// Создать тест (админ или преподаватель по модулю). Вопросы добавляются в редакторе теста.
 router.post('/', authRequired, wrap(requireAdminOrTeacherModule), async (req, res, next) => {
   try {
-    const { moduleId, title, createTenQuestions } = req.body;
+    const { moduleId, title } = req.body;
     if (!moduleId || !title?.trim()) return res.status(400).json({ error: 'Укажите модуль и название' });
     const r = await pool.query(
       'INSERT INTO tests (module_id, title) VALUES ($1, $2) RETURNING id, module_id, title, created_at',
       [moduleId, title.trim()]
     );
-    const test = r.rows[0];
-    if (createTenQuestions && test?.id) {
-      for (let i = 1; i <= QUESTIONS_PER_TEST; i++) {
-        await pool.query(
-          'INSERT INTO test_questions (test_id, text, points, order_index) VALUES ($1, $2, 1, $3)',
-          [test.id, `Вопрос ${i}`, i]
-        );
-      }
-    }
-    res.status(201).json(test);
+    res.status(201).json(r.rows[0]);
   } catch (err) {
     next(err);
   }
@@ -138,7 +128,19 @@ router.get('/:id', authRequired, async (req, res) => {
     );
     withOptions.push({ ...qu, options: opt.rows });
   }
-  res.json({ id: test.id, moduleId: test.module_id, title: test.title, questions: withOptions });
+  const payload = { id: test.id, moduleId: test.module_id, title: test.title, questions: withOptions };
+  if (forStudent) {
+    const attempts = await pool.query(
+      'SELECT COUNT(*) as cnt FROM grades WHERE user_id = $1 AND test_id = $2',
+      [req.userId, testId]
+    );
+    const attemptsUsed = Number(attempts.rows[0]?.cnt ?? 0);
+    const maxAttempts = 1;
+    payload.attemptsUsed = attemptsUsed;
+    payload.attemptsLeft = Math.max(0, maxAttempts - attemptsUsed);
+    payload.maxAttempts = maxAttempts;
+  }
+  res.json(payload);
 });
 
 router.patch('/:id', authRequired, wrap(requireAdminOrTeacherModule), async (req, res) => {
@@ -171,23 +173,77 @@ router.post('/:id/submit', authRequired, async (req, res) => {
     const ta = await pool.query('SELECT 1 FROM teacher_assignments WHERE teacher_id = $1 AND group_id = $2 AND subject_id = $3', [req.userId, test.group_id, test.subject_id]);
     if (!ta.rows.length) return res.status(403).json({ error: 'Нет доступа' });
   }
-  const questions = await pool.query('SELECT id, points FROM test_questions WHERE test_id = $1', [testId]);
+  const questions = await pool.query('SELECT id, points FROM test_questions WHERE test_id = $1 ORDER BY order_index, id', [testId]);
+  if (!questions.rows.length) {
+    return res.status(400).json({ error: 'В тесте нет вопросов' });
+  }
+  const questionIds = questions.rows.map((q) => Number(q.id));
+  const inPlaceholders = questionIds.map((_, i) => `$${i + 1}`).join(',');
+  const correctOptions = await pool.query(
+    `SELECT id, question_id FROM test_options WHERE question_id IN (${inPlaceholders}) AND (is_correct = 1 OR is_correct = true)`,
+    questionIds
+  );
+  const correctSet = new Set(
+    correctOptions.rows.map((r) => `${Number(r.question_id)}-${Number(r.id)}`)
+  );
   let maxScore = 0;
   let score = 0;
   const answerMap = new Map(answers.map((a) => [Number(a.questionId), Number(a.optionId)]));
   for (const q of questions.rows) {
-    maxScore += Number(q.points) || 1;
-    const chosenOptionId = answerMap.get(q.id);
-    if (chosenOptionId) {
-      const correct = await pool.query('SELECT 1 FROM test_options WHERE id = $1 AND question_id = $2 AND is_correct = 1', [chosenOptionId, q.id]);
-      if (correct.rows.length) score += Number(q.points) || 1;
+    const qId = Number(q.id);
+    const points = Number(q.points) || 1;
+    maxScore += points;
+    const chosenOptionId = answerMap.get(qId);
+    if (chosenOptionId != null && correctSet.has(`${qId}-${chosenOptionId}`)) {
+      score += points;
     }
   }
-  await pool.query(
-    'INSERT INTO grades (user_id, test_id, score) VALUES ($1, $2, $3)',
-    [req.userId, testId, score]
+  const MAX_ATTEMPTS = 1;
+  const userId = Number(req.userId);
+  const testIdNum = Number(testId);
+  const attempts = await pool.query(
+    'SELECT COUNT(*) as cnt FROM grades WHERE user_id = $1 AND test_id = $2',
+    [userId, testIdNum]
   );
-  res.json({ score, maxScore, success: true });
+  const attemptCount = Number(attempts.rows[0]?.cnt ?? 0);
+  if (attemptCount >= MAX_ATTEMPTS) {
+    return res.status(400).json({
+      error: `Доступ к тесту закрыт. Использована 1 попытка.`,
+      attemptsUsed: MAX_ATTEMPTS,
+    });
+  }
+  // Процент = (полученные баллы / максимальные баллы) * 100
+  const percent = maxScore > 0 ? (score / maxScore) * 100 : 0;
+  let grade = 2;
+  if (percent >= 80) grade = 5;
+  else if (percent >= 60) grade = 4;
+  else if (percent >= 40) grade = 3;
+  // Атомарная вставка: вставить только если попыток ещё 0 (защита от гонки)
+  await pool.query(
+    `INSERT INTO grades (user_id, test_id, score)
+     SELECT $1, $2, $3 WHERE (SELECT COUNT(*) FROM grades WHERE user_id = $4 AND test_id = $5) < 1`,
+    [userId, testIdNum, grade, userId, testIdNum]
+  );
+  const afterAttempts = await pool.query(
+    'SELECT COUNT(*) as cnt FROM grades WHERE user_id = $1 AND test_id = $2',
+    [userId, testIdNum]
+  );
+  const afterCount = Number(afterAttempts.rows[0]?.cnt ?? 0);
+  if (afterCount <= attemptCount) {
+    return res.status(400).json({
+      error: `Доступ к тесту закрыт. Использована 1 попытка.`,
+      attemptsUsed: MAX_ATTEMPTS,
+    });
+  }
+  res.json({
+    score,
+    maxScore,
+    grade,
+    percent: Math.round(percent * 10) / 10,
+    success: true,
+    attempt: afterCount,
+    attemptsLeft: MAX_ATTEMPTS - afterCount,
+  });
 });
 
 export default router;

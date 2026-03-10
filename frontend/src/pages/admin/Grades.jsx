@@ -47,7 +47,7 @@ export default function AdminGrades() {
                     <th>Студент</th>
                     <th>Логин</th>
                     <th>Лекция / тест</th>
-                    <th>Балл</th>
+                    <th>Оценка</th>
                     <th>Дата</th>
                   </tr>
                 </thead>
@@ -64,7 +64,7 @@ export default function AdminGrades() {
                 </tbody>
               </table>
             </div>
-            {list.length === 0 && <p className="empty-state">Нет записей. Выберите группу или добавьте оценки через API.</p>}
+            {list.length === 0 && <p className="empty-state">Нет записей. Оценки выставляются автоматически по результатам тестов (шкала 2–5).</p>}
           </>
         )}
       </div>

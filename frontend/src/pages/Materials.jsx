@@ -148,6 +148,7 @@ function MaterialsTree({ data, groupId, canAdd }) {
   const [addLectureModuleId, setAddLectureModuleId] = useState(null);
   const [addLectureTitle, setAddLectureTitle] = useState('');
   const [addLectureFile, setAddLectureFile] = useState(null);
+  const [addLectureLink, setAddLectureLink] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
@@ -166,7 +167,7 @@ function MaterialsTree({ data, groupId, canAdd }) {
     if (!addTestTitle.trim() || !moduleId) return;
     setSubmitting(true);
     try {
-      const { data: created } = await api.post('/tests', { moduleId, title: addTestTitle.trim(), createTenQuestions: true });
+      const { data: created } = await api.post('/tests', { moduleId, title: addTestTitle.trim() });
       setAddTestModuleId(null);
       setAddTestTitle('');
       if (created?.id) navigate(`/edit-test/${created.id}`);
@@ -182,12 +183,22 @@ function MaterialsTree({ data, groupId, canAdd }) {
 
   const createLecture = async (e, moduleId) => {
     e.preventDefault();
-    if (!addLectureTitle.trim() || !addLectureFile || !moduleId) return;
+    const linkTrim = addLectureLink.trim();
+    if (!addLectureTitle.trim() || !moduleId) return;
+    if (!addLectureFile && !linkTrim) {
+      alert('Выберите файл (до 10 МБ) или укажите ссылку');
+      return;
+    }
+    if (addLectureFile && linkTrim) {
+      alert('Укажите либо файл, либо ссылку');
+      return;
+    }
     setSubmitting(true);
     const form = new FormData();
     form.append('moduleId', moduleId);
     form.append('title', addLectureTitle.trim());
-    form.append('file', addLectureFile);
+    if (linkTrim) form.append('link', linkTrim);
+    if (addLectureFile) form.append('file', addLectureFile);
     const token = localStorage.getItem('token');
     try {
       const r = await fetch('/api/lectures', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form });
@@ -196,6 +207,7 @@ function MaterialsTree({ data, groupId, canAdd }) {
       setAddLectureModuleId(null);
       setAddLectureTitle('');
       setAddLectureFile(null);
+      setAddLectureLink('');
       if (groupId && !data) api.get(`/materials/tree?groupId=${groupId}`).then((res) => setLocalData(res.data));
       else if (data) api.get(`/materials/tree?groupId=${data.group?.id}`).then((res) => setLocalData(res.data));
     } catch (err) {
@@ -239,18 +251,19 @@ function MaterialsTree({ data, groupId, canAdd }) {
                   {addTestModuleId === mod.id ? (
                     <form onSubmit={(e) => createTest(e, mod.id)} className="add-inline-form">
                       <input value={addTestTitle} onChange={(e) => setAddTestTitle(e.target.value)} placeholder="Название теста" required />
-                      <button type="submit" className="btn btn-primary" disabled={submitting}>Создать (10 вопросов)</button>
+                      <button type="submit" className="btn btn-primary" disabled={submitting}>Создать тест</button>
                       <button type="button" className="btn btn-secondary" onClick={() => { setAddTestModuleId(null); setAddTestTitle(''); }}>Отмена</button>
                     </form>
                   ) : (
                     <button type="button" className="btn btn-secondary add-btn" onClick={() => setAddTestModuleId(mod.id)}>+ Добавить тест</button>
                   )}
                   {addLectureModuleId === mod.id ? (
-                    <form onSubmit={(e) => createLecture(e, mod.id)} className="add-inline-form">
+                    <form onSubmit={(e) => createLecture(e, mod.id)} className="add-inline-form" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
                       <input value={addLectureTitle} onChange={(e) => setAddLectureTitle(e.target.value)} placeholder="Название лекции" required />
-                      <input type="file" accept=".pdf,.docx,.doc,.md,.txt" onChange={(e) => setAddLectureFile(e.target.files?.[0])} required />
+                      <input type="file" accept=".pdf,.docx,.doc,.md,.txt,.ppt,.pptx,.xls,.xlsx,.mp4,.webm,.mov,.avi,.mkv" onChange={(e) => { setAddLectureFile(e.target.files?.[0]); setAddLectureLink(''); }} title="До 10 МБ" />
+                      <input type="url" value={addLectureLink} onChange={(e) => setAddLectureLink(e.target.value)} placeholder="https://... или файл" style={{ minWidth: 200 }} onFocus={() => setAddLectureFile(null)} />
                       <button type="submit" className="btn btn-primary" disabled={submitting}>Загрузить</button>
-                      <button type="button" className="btn btn-secondary" onClick={() => { setAddLectureModuleId(null); setAddLectureTitle(''); setAddLectureFile(null); }}>Отмена</button>
+                      <button type="button" className="btn btn-secondary" onClick={() => { setAddLectureModuleId(null); setAddLectureTitle(''); setAddLectureFile(null); setAddLectureLink(''); }}>Отмена</button>
                     </form>
                   ) : (
                     <button type="button" className="btn btn-secondary add-btn" onClick={() => setAddLectureModuleId(mod.id)}>+ Добавить лекцию</button>

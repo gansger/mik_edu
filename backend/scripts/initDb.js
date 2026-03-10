@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS lectures (
   file_path VARCHAR(500) NOT NULL,
   file_type VARCHAR(20) NOT NULL,
   order_index INTEGER DEFAULT 0,
+  link_url TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -140,6 +141,7 @@ CREATE TABLE IF NOT EXISTS lectures (
   file_path VARCHAR(500) NOT NULL,
   file_type VARCHAR(20) NOT NULL,
   order_index INTEGER DEFAULT 0,
+  link_url TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -241,8 +243,23 @@ async function initDb() {
       await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['test_questions']);
       console.log('Миграция: созданы таблицы тестирования');
     }
+    const mLectureLink = await pool.query(`SELECT 1 FROM _migrations WHERE name = $1`, ['lectures_link_url']);
+    const hasLectures = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='lectures'`);
+    if (!mLectureLink.rows?.length && hasLectures.rows?.length > 0) {
+      const info = await pool.query(`SELECT name FROM pragma_table_info('lectures') WHERE name = 'link_url'`);
+      if (!info.rows?.length) {
+        await pool.query(`ALTER TABLE lectures ADD COLUMN link_url TEXT`);
+        await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['lectures_link_url']);
+        console.log('Миграция: добавлена колонка link_url в lectures');
+      }
+    }
   } else {
     await pool.query(SQL);
+    const mLectureLink = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'lectures' AND column_name = 'link_url'`);
+    if (!mLectureLink.rows?.length) {
+      await pool.query(`ALTER TABLE lectures ADD COLUMN link_url TEXT`);
+      console.log('Миграция: добавлена колонка link_url в lectures');
+    }
   }
 
   const { rows } = await pool.query("SELECT 1 FROM users WHERE role = 'admin'");

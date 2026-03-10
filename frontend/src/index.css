@@ -79,6 +79,99 @@ input, select, textarea {
   background: var(--surface-hover);
 }
 
+/* Мобильное меню: скрыть боковую панель, показать кнопку и выпадающий список */
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 1.25rem;
+}
+
+.mobile-menu-icon {
+  line-height: 1;
+}
+
+.nav-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+.nav-dropdown {
+  display: none;
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0;
+  z-index: 101;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.nav-dropdown a {
+  display: block;
+  padding: 0.75rem 1.25rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.nav-dropdown a:hover, .nav-dropdown a.active {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .nav-overlay.nav-overlay-visible {
+    display: block;
+  }
+
+  .nav-dropdown.nav-dropdown-open {
+    display: block;
+  }
+
+  .content {
+    padding: 1rem;
+  }
+
+  .header-inner {
+    flex-wrap: wrap;
+  }
+
+  .user-info {
+    font-size: 0.85rem;
+  }
+
+  .user-info .badge {
+    display: block;
+    margin-left: 0;
+    margin-top: 0.25rem;
+  }
+}
+
+@media (min-width: 769px) {
+  .nav-dropdown-open + .layout .content { margin-left: 0; }
+}
+
 .sidebar-divider {
   padding: 0.75rem 1.25rem 0.35rem;
   font-size: 0.7rem;
@@ -248,6 +341,10 @@ th {
   color: var(--text-muted);
 }
 
+.text-muted {
+  color: var(--text-muted);
+}
+
 .badge {
   display: inline-block;
   padding: 0.2rem 0.5rem;
@@ -293,6 +390,8 @@ th {
 
 .test-link { text-decoration: none; color: var(--text); }
 .test-link:hover { color: var(--accent); }
+.test-link.test-closed { color: var(--text-muted); cursor: default; }
+.test-link.test-closed .closed-badge { font-size: 0.85em; color: var(--text-muted); }
 .test-question-text { margin: 0 0 0.5rem 0; }
 .test-points { color: var(--text-muted); font-size: 0.9rem; }
 .test-options { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -311,6 +410,7 @@ th {
 .add-option-form input[type="text"] { flex: 1; min-width: 150px; padding: 0.4rem; }
 .correct-cb { display: flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
 
+.journal-filters { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
 .journal-table-wrap { overflow-x: auto; }
 .journal-table { border-collapse: collapse; min-width: 100%; }
 .journal-table th, .journal-table td { border: 1px solid var(--border); padding: 0.5rem 0.6rem; text-align: center; vertical-align: middle; }
@@ -320,3 +420,7 @@ th {
 .journal-cell { min-width: 2.5rem; }
 .journal-student-name { display: block; font-weight: 500; }
 .journal-student-login { display: block; font-size: 0.8rem; color: var(--text-muted); }
+.journal-avg-col { font-weight: 600; min-width: 4rem; background: var(--surface-hover); }
+.journal-avg-cell { font-weight: 500; }
+.journal-avg-row { background: var(--surface-hover); }
+.journal-avg-row .journal-col-student { background: var(--surface-hover); }

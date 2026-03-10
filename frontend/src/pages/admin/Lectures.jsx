@@ -12,6 +12,7 @@ export default function AdminLectures() {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
   const [file, setFile] = useState(null);
+  const [link, setLink] = useState('');
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => { api.get('/groups').then((r) => setGroups(r.data || [])); }, []);
@@ -34,12 +35,22 @@ export default function AdminLectures() {
 
   const create = (e) => {
     e.preventDefault();
-    if (!moduleId || !title.trim() || !file) return;
+    const linkTrim = link.trim();
+    if (!moduleId || !title.trim()) return;
+    if (!file && !linkTrim) {
+      alert('Выберите файл (до 10 МБ) или укажите ссылку');
+      return;
+    }
+    if (file && linkTrim) {
+      alert('Укажите либо файл, либо ссылку');
+      return;
+    }
     setUploading(true);
     const form = new FormData();
     form.append('moduleId', moduleId);
     form.append('title', title.trim());
-    form.append('file', file);
+    if (linkTrim) form.append('link', linkTrim);
+    if (file) form.append('file', file);
     const token = localStorage.getItem('token');
     fetch('/api/lectures', {
       method: 'POST',
@@ -51,7 +62,9 @@ export default function AdminLectures() {
         if (data.error) throw new Error(data.error);
         setTitle('');
         setFile(null);
-        document.getElementById('lecture-file').value = '';
+        setLink('');
+        const el = document.getElementById('lecture-file');
+        if (el) el.value = '';
         return api.get(`/lectures?moduleId=${moduleId}`);
       })
       .then((r) => setList(r.data || []))
@@ -95,14 +108,19 @@ export default function AdminLectures() {
       {moduleId && (
         <>
           <form onSubmit={create} className="card" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ marginTop: 0 }}>Добавить лекцию (PDF / DOCX / MD)</h3>
+            <h3 style={{ marginTop: 0 }}>Добавить лекцию: файл (до 10 МБ) или ссылка</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>Файлы: PDF, DOC/DOCX, TXT, MD, PPT/PPTX, XLS/XLSX, видео (MP4, WebM, MOV, AVI, MKV). Либо укажите ссылку.</p>
             <div className="form-group" style={{ maxWidth: 400 }}>
               <label>Название</label>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название лекции" />
             </div>
             <div className="form-group" style={{ maxWidth: 400 }}>
-              <label>Файл</label>
-              <input id="lecture-file" type="file" accept=".pdf,.docx,.doc,.md,.txt" onChange={(e) => setFile(e.target.files?.[0])} />
+              <label>Файл (макс. 10 МБ)</label>
+              <input id="lecture-file" type="file" accept=".pdf,.docx,.doc,.md,.txt,.ppt,.pptx,.xls,.xlsx,.mp4,.webm,.mov,.avi,.mkv" onChange={(e) => { setFile(e.target.files?.[0] || null); setLink(''); }} />
+            </div>
+            <div className="form-group" style={{ maxWidth: 500 }}>
+              <label>Или ссылка</label>
+              <input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://..." onFocus={() => { setFile(null); const el = document.getElementById('lecture-file'); if (el) el.value = ''; }} />
             </div>
             <button type="submit" className="btn btn-primary" disabled={uploading}>{uploading ? 'Загрузка...' : 'Загрузить'}</button>
           </form>

@@ -15,6 +15,7 @@ export default function ModuleDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [lectureTitle, setLectureTitle] = useState('');
   const [lectureFile, setLectureFile] = useState(null);
+  const [lectureLink, setLectureLink] = useState('');
   const [lectureSubmitting, setLectureSubmitting] = useState(false);
 
   const loadGroup = () => api.get('/groups').then((r) => {
@@ -42,7 +43,7 @@ export default function ModuleDetail() {
     e.preventDefault();
     if (!testTitle.trim()) return;
     setSubmitting(true);
-    api.post('/tests', { moduleId: parseInt(moduleId, 10), title: testTitle.trim(), createTenQuestions: true })
+    api.post('/tests', { moduleId: parseInt(moduleId, 10), title: testTitle.trim() })
       .then((r) => {
         setTestTitle('');
         const id = r.data?.id;
@@ -60,19 +61,30 @@ export default function ModuleDetail() {
 
   const addLecture = (e) => {
     e.preventDefault();
-    if (!lectureTitle.trim() || !lectureFile) {
-      alert('Укажите название и выберите файл');
+    const linkTrim = lectureLink.trim();
+    if (!lectureTitle.trim()) {
+      alert('Укажите название');
+      return;
+    }
+    if (!lectureFile && !linkTrim) {
+      alert('Выберите файл (до 10 МБ) или укажите ссылку');
+      return;
+    }
+    if (lectureFile && linkTrim) {
+      alert('Укажите либо файл, либо ссылку');
       return;
     }
     setLectureSubmitting(true);
     const form = new FormData();
     form.append('moduleId', moduleId);
     form.append('title', lectureTitle.trim());
-    form.append('file', lectureFile);
+    if (linkTrim) form.append('link', linkTrim);
+    if (lectureFile) form.append('file', lectureFile);
     api.post('/lectures', form, true)
       .then(() => {
         setLectureTitle('');
         setLectureFile(null);
+        setLectureLink('');
         loadLectures();
       })
       .catch((err) => alert(err?.error || err?.message || 'Ошибка загрузки'))
@@ -98,10 +110,12 @@ export default function ModuleDetail() {
       <h1 className="page-title">Модуль: {module.name}</h1>
 
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <h3 style={{ marginTop: 0 }}>Лекции (файлы TXT, DOCX, PPTX, PDF и др.)</h3>
-        <form onSubmit={addLecture} className="add-inline-form" style={{ marginBottom: '1rem' }}>
+        <h3 style={{ marginTop: 0 }}>Лекции: файлы (до 10 МБ) или ссылки</h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>Файлы: PDF, DOC/DOCX, TXT, MD, PPT/PPTX, XLS/XLSX, видео (MP4, WebM, MOV, AVI, MKV). Либо вставьте ссылку.</p>
+        <form onSubmit={addLecture} className="add-inline-form" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <input value={lectureTitle} onChange={(e) => setLectureTitle(e.target.value)} placeholder="Название лекции" required style={{ minWidth: 180 }} />
-          <input type="file" accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx" onChange={(e) => setLectureFile(e.target.files?.[0] || null)} />
+          <input type="file" accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx,.mp4,.webm,.mov,.avi,.mkv" onChange={(e) => { setLectureFile(e.target.files?.[0] || null); setLectureLink(''); }} />
+          <input type="url" value={lectureLink} onChange={(e) => setLectureLink(e.target.value)} placeholder="https://... (или файл выше)" style={{ minWidth: 220 }} onFocus={() => setLectureFile(null)} />
           <button type="submit" className="btn btn-primary" disabled={lectureSubmitting}>{lectureSubmitting ? 'Загрузка...' : 'Добавить лекцию'}</button>
         </form>
         {lectures.length === 0 ? (
@@ -125,12 +139,12 @@ export default function ModuleDetail() {
 
       <form onSubmit={createTest} className="card" style={{ marginBottom: '1.5rem' }}>
         <h3 style={{ marginTop: 0 }}>Создать тестирование</h3>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Будет создан тест с 10 вопросами (их можно отредактировать после создания).</p>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Будет создан пустой тест. Вопросы добавьте в редакторе после создания.</p>
         <div className="form-group" style={{ maxWidth: 400 }}>
           <label>Название теста</label>
           <input value={testTitle} onChange={(e) => setTestTitle(e.target.value)} placeholder="Название теста" required />
         </div>
-        <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Создание...' : 'Создать тест (10 вопросов)'}</button>
+        <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Создание...' : 'Создать тест'}</button>
       </form>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Тесты модуля</h3>

@@ -10,6 +10,7 @@ const router = Router();
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
 if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -20,11 +21,11 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (req, file, cb) => {
-    const allowed = /\.(pdf|docx?|md|txt|pptx?|xlsx?)$/i.test(file.originalname);
+    const allowed = /\.(pdf|docx?|md|txt|pptx?|xlsx?|mp4|webm|mov|avi|mkv)$/i.test(file.originalname);
     if (allowed) cb(null, true);
-    else cb(new Error('Разрешены: PDF, DOC/DOCX, TXT, MD, PPT/PPTX, XLS/XLSX'));
+    else cb(new Error('Разрешены: PDF, DOC/DOCX, TXT, MD, PPT/PPTX, XLS/XLSX, видео (MP4, WebM, MOV, AVI, MKV). Макс. 10 МБ'));
   },
 });
 
@@ -44,11 +45,29 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-// Админ или преподаватель (по своему модулю): создать лекцию
+
+function isUrl(s) {
+  const t = (s || '').trim();
+  return t.startsWith('http://') || t.startsWith('https://');
+}
+
+// Админ или преподаватель (по своему модулю): создать лекцию (файл до 10 МБ или ссылка)
 router.post('/', authRequired, upload.single('file'), wrap(requireAdminOrTeacherModule), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Загрузите файл' });
-  const { moduleId, title, orderIndex } = req.body;
+  const { moduleId, title, orderIndex, link } = req.body;
   if (!moduleId || !title?.trim()) return res.status(400).json({ error: 'Укажите модуль и название' });
+
+  const linkUrl = typeof link === 'string' ? link.trim() : '';
+  if (linkUrl) {
+    if (!isUrl(linkUrl)) return res.status(400).json({ error: 'Ссылка должна начинаться с http:// или https://' });
+    const r = await pool.query(
+      `INSERT INTO lectures (module_id, title, file_path, file_type, order_index, link_url)
+       VALUES ($1, $2, '', 'link', COALESCE($3, 0), $4) RETURNING id, module_id, title, file_path, file_type, order_index, created_at`,
+      [moduleId, title.trim(), orderIndex ? parseInt(orderIndex, 10) : 0, linkUrl]
+    );
+    return res.status(201).json(r.rows[0]);
+  }
+
+  if (!req.file) return res.status(400).json({ error: 'Загрузите файл (до 10 МБ) или укажите ссылку' });
   const ext = extname(req.file.originalname).toLowerCase();
   let fileType = 'other';
   if (ext === '.pdf') fileType = 'pdf';
@@ -57,6 +76,7 @@ router.post('/', authRequired, upload.single('file'), wrap(requireAdminOrTeacher
   else if (/\.pptx?$/.test(ext)) fileType = 'pptx';
   else if (/\.xlsx?$/.test(ext)) fileType = 'xlsx';
   else if (ext === '.txt') fileType = 'txt';
+  else if (/\.(mp4|webm|mov|avi|mkv)$/.test(ext)) fileType = 'video';
   const r = await pool.query(
     `INSERT INTO lectures (module_id, title, file_path, file_type, order_index)
      VALUES ($1, $2, $3, $4, COALESCE($5, 0)) RETURNING id, module_id, title, file_path, file_type, order_index, created_at`,

@@ -22,6 +22,9 @@ export default function AdminUsers() {
   const [editProfileId, setEditProfileId] = useState(null);
   const [editFullName, setEditFullName] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [bulkRows, setBulkRows] = useState([{ login: '', password: '', fullName: '', role: 'student', groupId: '' }]);
+  const [bulkPaste, setBulkPaste] = useState('');
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
   const load = () => api.get('/users').then((r) => setList(r.data || [])).finally(() => setLoading(false));
 
@@ -115,6 +118,66 @@ export default function AdminUsers() {
     api.delete(`/users/${id}`).then(() => load()).catch((err) => alert(err.error || 'Ошибка'));
   };
 
+  const addBulkRow = () => {
+    setBulkRows([...bulkRows, { login: '', password: '', fullName: '', role: 'student', groupId: '' }]);
+  };
+  const updateBulkRow = (idx, field, value) => {
+    const next = [...bulkRows];
+    next[idx] = { ...next[idx], [field]: value };
+    setBulkRows(next);
+  };
+  const removeBulkRow = (idx) => {
+    if (bulkRows.length <= 1) return;
+    setBulkRows(bulkRows.filter((_, i) => i !== idx));
+  };
+  const applyBulkPaste = () => {
+    const text = bulkPaste.trim();
+    if (!text) return;
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    const rows = lines.map((line) => {
+      const parts = line.split(/\t/).map((p) => p.trim());
+      return {
+        login: parts[0] || '',
+        password: parts[1] || '',
+        fullName: parts[2] || '',
+        role: (parts[3] || 'student').toLowerCase(),
+        groupId: parts[4] ?? '',
+      };
+    });
+    setBulkRows(rows.length ? rows : [{ login: '', password: '', fullName: '', role: 'student', groupId: '' }]);
+    setBulkPaste('');
+  };
+  const submitBulk = () => {
+    const users = bulkRows
+      .filter((r) => r.login.trim() || r.password)
+      .map((r) => {
+        const role = ['admin', 'teacher', 'student'].includes(r.role) ? r.role : 'student';
+        const group = groups.find((g) => String(g.id) === String(r.groupId) || g.name === r.groupId);
+        return {
+          login: r.login.trim(),
+          password: r.password,
+          fullName: r.fullName.trim(),
+          role,
+          groupId: role === 'student' && group ? group.id : undefined,
+          group: role === 'student' && r.groupId && !group ? String(r.groupId).trim() : undefined,
+        };
+      });
+    if (!users.length) return alert('Добавьте хотя бы одного пользователя с логином и паролем');
+    if (users.some((u) => !u.login || !u.password)) return alert('У каждого пользователя должны быть логин и пароль');
+    setBulkSubmitting(true);
+    api
+      .post('/users/bulk', { users })
+      .then(({ data }) => {
+        const msg = `Создано: ${data.created}. Ошибки: ${data.errors?.length || 0}`;
+        if (data.errors?.length) alert(msg + '\n' + data.errors.map((e) => `Строка ${e.row}: ${e.error}`).join('\n'));
+        else alert(msg);
+        setBulkRows([{ login: '', password: '', fullName: '', role: 'student', groupId: '' }]);
+        load();
+      })
+      .catch((err) => alert(err?.error || 'Ошибка'))
+      .finally(() => setBulkSubmitting(false));
+  };
+
   const roleLabel = (r) => (r === 'admin' ? 'Админ' : r === 'teacher' ? 'Преподаватель' : 'Студент');
 
   if (loading) return <div className="content">Загрузка...</div>;
@@ -183,6 +246,63 @@ export default function AdminUsers() {
         )}
         <button type="submit" className="btn btn-primary">Создать</button>
       </form>
+
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h3 style={{ marginTop: 0 }}>Добавить из таблицы</h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+          Заполните строки или вставьте данные (логин, пароль, ФИО, роль, группа — через табуляцию или выберите в полях). Для студентов обязательно укажите группу.
+        </p>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Логин</th>
+                <th>Пароль</th>
+                <th>ФИО</th>
+                <th>Роль</th>
+                <th>Группа</th>
+                <th style={{ width: 60 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {bulkRows.map((row, idx) => (
+                <tr key={idx}>
+                  <td><input type="text" value={row.login} onChange={(e) => updateBulkRow(idx, 'login', e.target.value)} placeholder="Логин" className="inline-edit" /></td>
+                  <td><input type="password" value={row.password} onChange={(e) => updateBulkRow(idx, 'password', e.target.value)} placeholder="Пароль" className="inline-edit" /></td>
+                  <td><input type="text" value={row.fullName} onChange={(e) => updateBulkRow(idx, 'fullName', e.target.value)} placeholder="ФИО" className="inline-edit" /></td>
+                  <td>
+                    <select value={row.role} onChange={(e) => updateBulkRow(idx, 'role', e.target.value)} className="inline-edit" style={{ width: 140 }}>
+                      <option value="admin">Админ</option>
+                      <option value="teacher">Преподаватель</option>
+                      <option value="student">Студент</option>
+                    </select>
+                  </td>
+                  <td>
+                    {row.role === 'student' ? (
+                      <select value={row.groupId} onChange={(e) => updateBulkRow(idx, 'groupId', e.target.value)} className="inline-edit" style={{ minWidth: 140 }}>
+                        <option value="">— Группа —</option>
+                        {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td><button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem' }} onClick={() => removeBulkRow(idx)} title="Удалить строку">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginTop: '1rem' }}>
+          <button type="button" className="btn btn-secondary" onClick={addBulkRow}>+ Строка</button>
+          <button type="button" className="btn btn-primary" onClick={submitBulk} disabled={bulkSubmitting}>{bulkSubmitting ? 'Создание...' : 'Создать выбранных'}</button>
+        </div>
+        <div className="form-group" style={{ marginTop: '1rem' }}>
+          <label>Или вставьте из буфера (столбцы через табуляцию: логин, пароль, ФИО, роль, группа)</label>
+          <textarea value={bulkPaste} onChange={(e) => setBulkPaste(e.target.value)} placeholder="login&#10;password&#10;ФИО&#10;student&#10;Группа 1" rows={3} style={{ width: '100%', maxWidth: 500 }} />
+          <button type="button" className="btn btn-secondary" onClick={applyBulkPaste}>Применить</button>
+        </div>
+      </div>
 
       {editProfileId && (
         <div className="card" style={{ marginBottom: '1.5rem' }}>

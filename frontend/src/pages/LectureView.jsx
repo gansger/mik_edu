@@ -14,14 +14,25 @@ export default function LectureView() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const url = `/api/files/lecture/${id}?token=${encodeURIComponent(token || '')}`;
-    fetch(url, { credentials: 'include' })
+    fetch(url, { credentials: 'include', redirect: 'manual' })
       .then((r) => {
+        if (r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400)) {
+          const location = r.headers.get('Location');
+          if (location) {
+            setLecture({ fileType: 'link', title: 'Ссылка', url: location });
+            return { type: 'link' };
+          }
+        }
         if (!r.ok) throw new Error('Файл недоступен');
         const contentType = r.headers.get('Content-Type') || '';
         const disposition = r.headers.get('Content-Disposition') || '';
         if (contentType.includes('pdf')) {
           setLecture({ fileType: 'pdf', title: 'Лекция' });
           return r.blob().then((blob) => ({ blob, type: 'pdf' }));
+        }
+        if (contentType.includes('video/')) {
+          setLecture({ fileType: 'video', title: 'Видео' });
+          return r.blob().then((blob) => ({ blob, type: 'video' }));
         }
         if (contentType.includes('octet-stream') || disposition.includes('attachment')) {
           setLecture({ fileType: 'docx', title: 'Лекция', downloadUrl: url });
@@ -35,6 +46,9 @@ export default function LectureView() {
       })
       .then((result) => {
         if (result?.type === 'pdf' && result?.blob) {
+          setLecture((prev) => ({ ...prev, url: URL.createObjectURL(result.blob) }));
+        }
+        if (result?.type === 'video' && result?.blob) {
           setLecture((prev) => ({ ...prev, url: URL.createObjectURL(result.blob) }));
         }
       })
@@ -59,13 +73,24 @@ export default function LectureView() {
             <ReactMarkdown>{mdContent || ''}</ReactMarkdown>
           </div>
         )}
+        {lecture?.fileType === 'video' && lecture?.url && (
+          <div className="card">
+            <video src={lecture.url} controls className="lecture-video" style={{ maxWidth: '100%' }} />
+          </div>
+        )}
+        {lecture?.fileType === 'link' && lecture?.url && (
+          <div className="card">
+            <p>Внешняя ссылка. Открыть в новой вкладке:</p>
+            <a href={lecture.url} className="btn btn-primary" target="_blank" rel="noopener noreferrer">Открыть ссылку</a>
+          </div>
+        )}
         {lecture?.fileType === 'docx' && (
           <div className="card">
             <p>Документ Word (DOCX). Откройте или сохраните файл.</p>
             <a href={lecture.downloadUrl || lectureFileUrl(id)} className="btn btn-primary" target="_blank" rel="noopener noreferrer">Скачать / открыть файл</a>
           </div>
         )}
-        {!lecture?.url && !mdContent && lecture?.fileType !== 'docx' && (
+        {!lecture?.url && !mdContent && lecture?.fileType !== 'docx' && lecture?.fileType !== 'link' && lecture?.fileType !== 'video' && (
           <p className="empty-state">Просмотр этого типа файла в браузере не поддерживается. <a href={lectureFileUrl(id)} target="_blank" rel="noopener noreferrer">Скачать файл</a>.</p>
         )}
       </div>

@@ -20,13 +20,20 @@ import { runMigrations } from './scripts/runMigrations.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8000;
 const useSqlite = !process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('sqlite');
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-app.get('/health', (req, res) => res.status(200).send('ok'));
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query?.('SELECT 1');
+    return res.status(200).json({ status: 'ok', db: 'ok' });
+  } catch (e) {
+    return res.status(500).json({ status: 'error', db: 'fail', message: e.message });
+  }
+});
 
 app.use('/api/auth', auth);
 app.use('/api/users', users);

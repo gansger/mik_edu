@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { createReadStream, existsSync } from 'fs';
-import { join } from 'path';
+import { join, extname } from 'path';
 import pool from '../config/db.js';
 
 const router = Router();
@@ -25,7 +25,7 @@ function authForFile(req, res, next) {
 router.get('/lecture/:id', authForFile, async (req, res) => {
   const lectureId = req.params.id;
   const r = await pool.query(
-    `SELECT l.id, l.file_path, l.file_type, l.title, m.subject_id, s.group_id
+    `SELECT l.id, l.file_path, l.file_type, l.title, l.link_url, m.subject_id, s.group_id
      FROM lectures l
      JOIN modules m ON l.module_id = m.id
      JOIN subjects s ON m.subject_id = s.id
@@ -44,6 +44,11 @@ router.get('/lecture/:id', authForFile, async (req, res) => {
     );
     if (!ta.rows.length) return res.status(403).json({ error: 'Нет доступа к этому материалу' });
   }
+
+  if (lecture.file_type === 'link' && lecture.link_url) {
+    return res.redirect(302, lecture.link_url);
+  }
+
   const filePath = join(uploadDir, lecture.file_path);
   if (!existsSync(filePath)) return res.status(404).json({ error: 'Файл не найден' });
   const type = lecture.file_type;
@@ -52,9 +57,14 @@ router.get('/lecture/:id', authForFile, async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(lecture.title)}.pdf"`);
   } else if (type === 'md') {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  } else if (type === 'video') {
+    const ext = extname(lecture.file_path).toLowerCase();
+    const videoMime = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.avi': 'video/x-msvideo', '.mkv': 'video/x-matroska' }[ext] || 'video/mp4';
+    res.setHeader('Content-Type', videoMime);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(lecture.title)}"`);
   } else {
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(lecture.title)}.docx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(lecture.title)}"`);
   }
   createReadStream(filePath).pipe(res);
 });
