@@ -12,6 +12,10 @@ export default function EditTest() {
   const [newQuestionText, setNewQuestionText] = useState('');
   const [newQuestionPoints, setNewQuestionPoints] = useState(1);
   const [addQuestionSaving, setAddQuestionSaving] = useState(false);
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiCount, setAiCount] = useState(5);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
   useEffect(() => {
     api.get(`/tests/${id}`)
@@ -82,6 +86,25 @@ export default function EditTest() {
       .finally(() => setSaving((s) => ({ ...s, [`q-${qid}`]: false })));
   };
 
+  const generateWithAi = (e) => {
+    e.preventDefault();
+    const topic = (aiTopic || '').trim();
+    if (!topic) {
+      setAiError('Введите тему для генерации');
+      return;
+    }
+    setAiError(null);
+    setAiLoading(true);
+    api.post(`/tests/${id}/generate-questions`, { topic, count: aiCount })
+      .then((r) => {
+        setAiTopic('');
+        return api.get(`/tests/${id}`);
+      })
+      .then((r) => setTest(r.data))
+      .catch((err) => setAiError(err.response?.data?.error || err.message || 'Ошибка генерации'))
+      .finally(() => setAiLoading(false));
+  };
+
   if (loading) return <div className="content">Загрузка...</div>;
   if (!test) return <div className="content"><p className="empty-state">Тест не найден.</p><Link to="/groups" className="btn btn-secondary">← К группам</Link></div>;
 
@@ -134,8 +157,32 @@ export default function EditTest() {
             </form>
           </div>
         ))}
+        <div className="card" style={{ background: 'var(--surface)', marginTop: '1rem', border: '1px solid var(--border)' }}>
+          <h3 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Сгенерировать вопросы с помощью ИИ</h3>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+            Укажите тему — ИИ создаст вопросы с вариантами ответов и добавит их в тест.
+          </p>
+          <form onSubmit={generateWithAi} className="add-inline-form" style={{ flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-end' }}>
+            <input
+              placeholder="Тема (например: основы SQL)"
+              value={aiTopic}
+              onChange={(e) => { setAiTopic(e.target.value); setAiError(null); }}
+              style={{ minWidth: 200, flex: 1 }}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              Вопросов:
+              <select value={aiCount} onChange={(e) => setAiCount(Number(e.target.value))} style={{ padding: '0.35rem' }}>
+                {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <button type="submit" className="btn btn-primary" disabled={aiLoading || !aiTopic.trim()}>
+              {aiLoading ? 'Генерация...' : 'Сгенерировать с ИИ'}
+            </button>
+          </form>
+          {aiError && <p style={{ color: 'var(--danger)', marginTop: '0.5rem', marginBottom: 0 }}>{aiError}</p>}
+        </div>
         <div className="card" style={{ background: 'var(--surface-hover)', marginTop: '1rem' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '0.75rem' }}>Добавить вопрос</h3>
+          <h3 style={{ marginTop: 0, marginBottom: '0.75rem' }}>Добавить вопрос вручную</h3>
           <form onSubmit={addQuestion} className="add-inline-form" style={{ flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-end' }}>
             <input
               placeholder="Текст вопроса"

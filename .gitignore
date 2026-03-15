@@ -5,6 +5,7 @@ frontend/node_modules/
 
 # === Переменные окружения (ПАРОЛИ!) ===
 .env
+backend/.env
 *.env.local
 *.env.production
 

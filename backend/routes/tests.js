@@ -1,7 +1,12 @@
 import { Router } from 'express';
+import fetch from 'node-fetch';
 import pool from '../config/db.js';
 import { authRequired, adminOnly } from '../middleware/auth.js';
 import { requireAdminOrTeacherModule, canTeacherAccessModule } from '../middleware/teacherModule.js';
+
+const QWEN_API_KEY = process.env.QWEN_API_KEY || '';
+const QWEN_API_URL = process.env.QWEN_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
+const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen/qwen3-32b';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -93,6 +98,109 @@ router.patch('/options/:oid', authRequired, wrap(requireAdminOrTeacherModule), a
 router.delete('/options/:oid', authRequired, wrap(requireAdminOrTeacherModule), async (req, res) => {
   await pool.query('DELETE FROM test_options WHERE id = $1', [req.params.oid]);
   res.status(204).send();
+});
+
+// Сгенерировать вопросы теста с помощью Qwen (админ или преподаватель по модулю)
+router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherModule), async (req, res) => {
+  if (!QWEN_API_KEY) {
+    return res.status(503).json({ error: 'Генерация ИИ не настроена. Задайте QWEN_API_KEY в backend/.env' });
+  }
+  const testId = req.params.id;
+  const { topic, count = 5 } = req.body;
+  const theme = (topic || '').trim();
+  if (!theme) return res.status(400).json({ error: 'Укажите тему (topic) для генерации вопросов' });
+  const num = Math.min(10, Math.max(1, parseInt(count, 10) || 5));
+
+  const testRow = await pool.query(
+    'SELECT id, title FROM tests WHERE id = $1',
+    [testId]
+  );
+  if (!testRow.rows[0]) return res.status(404).json({ error: 'Тест не найден' });
+
+  const sysPrompt = `Ты — помощник по созданию тестов. Отвечай только валидным JSON без markdown и пояснений.
+Формат ответа: { "questions": [ { "text": "Текст вопроса", "points": 1, "options": [ { "text": "Вариант ответа", "isCorrect": true или false } ] } ] }
+У каждого вопроса 2–4 варианта ответа, ровно один isCorrect: true. Текст на русском.`;
+
+  const userPrompt = `Сгенерируй ${num} вопросов с вариантами ответов по теме: «${theme}». Верни только JSON в указанном формате.`;
+
+  try {
+    const resp = await fetch(QWEN_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${QWEN_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: QWEN_MODEL,
+        messages: [
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+      }),
+    });
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      console.error('Groq/Qwen API error:', resp.status, errBody);
+      let errMsg = 'Ошибка API';
+      try {
+        const errJson = JSON.parse(errBody);
+        errMsg = errJson.error?.message || errJson.message || errMsg;
+      } catch (_) {}
+      return res.status(502).json({ error: errMsg });
+    }
+    const dataRaw = await resp.json();
+    const content = dataRaw.choices?.[0]?.message?.content;
+    if (!content) return res.status(502).json({ error: 'ИИ не вернул ответ' });
+
+    let data;
+    try {
+      data = JSON.parse(content);
+    } catch {
+      return res.status(502).json({ error: 'ИИ вернул невалидный JSON' });
+    }
+
+    const questions = Array.isArray(data.questions) ? data.questions : [];
+    const created = [];
+
+    for (const q of questions) {
+      const text = (q.text || '').trim();
+      const points = Math.max(1, parseInt(q.points, 10) || 1);
+      const options = Array.isArray(q.options) ? q.options : [];
+      if (!text) continue;
+
+      const qr = await pool.query(
+        'INSERT INTO test_questions (test_id, text, points) VALUES ($1, $2, $3) RETURNING id',
+        [testId, text, points]
+      );
+      const questionId = qr.rows[0]?.id;
+      if (!questionId) continue;
+
+      let hasCorrect = false;
+      for (const o of options) {
+        const optionText = (o.text || '').trim();
+        if (!optionText) continue;
+        const isCorrect = !!o.isCorrect;
+        if (isCorrect) hasCorrect = true;
+        await pool.query(
+          'INSERT INTO test_options (question_id, text, is_correct) VALUES ($1, $2, $3)',
+          [questionId, optionText, isCorrect ? 1 : 0]
+        );
+      }
+      if (!hasCorrect && options.length > 0) {
+        await pool.query(
+          `UPDATE test_options SET is_correct = 1 WHERE question_id = $1 AND id = (SELECT id FROM test_options WHERE question_id = $1 LIMIT 1)`,
+          [questionId, questionId]
+        );
+      }
+      created.push({ questionId, text, optionsCount: options.length });
+    }
+
+    return res.status(201).json({ generated: created.length, questions: created });
+  } catch (err) {
+    console.error('Qwen error:', err);
+    return res.status(502).json({ error: 'Ошибка ИИ: ' + (err.message || 'неизвестная') });
+  }
 });
 
 // Тест по id: студент — для прохождения (без is_correct); админ/преподаватель — для редактирования (с is_correct)
