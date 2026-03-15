@@ -33,3 +33,7 @@ Thumbs.db
 # === Загруженные файлы (НЕ коммитим контент, но оставляем папку) ===
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# === Базы данных ===
+backend/data/*.db
+*.db
