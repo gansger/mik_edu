@@ -26,14 +26,20 @@ const useSqlite = !process.env.DATABASE_URL || process.env.DATABASE_URL.startsWi
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-app.get('/health', async (req, res) => {
+const healthHandler = async (req, res) => {
   try {
     await pool.query?.('SELECT 1');
-    return res.status(200).json({ status: 'ok', db: 'ok' });
+    return res.status(200).json({
+      status: 'ok',
+      db: 'ok',
+      aiConfigured: Boolean(process.env.QWEN_API_KEY),
+    });
   } catch (e) {
     return res.status(500).json({ status: 'error', db: 'fail', message: e.message });
   }
-});
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 app.use('/api/auth', auth);
 app.use('/api/users', users);

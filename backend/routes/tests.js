@@ -103,7 +103,9 @@ router.delete('/options/:oid', authRequired, wrap(requireAdminOrTeacherModule), 
 // Сгенерировать вопросы теста с помощью Qwen (админ или преподаватель по модулю)
 router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherModule), async (req, res) => {
   if (!QWEN_API_KEY) {
-    return res.status(503).json({ error: 'Генерация ИИ не настроена. Задайте QWEN_API_KEY в backend/.env' });
+    return res.status(503).json({
+      error: 'Генерация ИИ не настроена. Для Docker: создайте файл .env в корне проекта (рядом с docker-compose.yml), добавьте QWEN_API_KEY=ваш_ключ_groq и выполните: docker compose down && docker compose up -d',
+    });
   }
   const testId = req.params.id;
   const { topic, count = 5 } = req.body;
