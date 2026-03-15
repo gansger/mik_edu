@@ -71,13 +71,20 @@ cp .env.example .env
 | `DATABASE_URL`  | Не задавать или `sqlite://` — использовать SQLite. Для PostgreSQL: `postgresql://user:password@host:5432/dbname` |
 | `UPLOAD_DIR`    | Папка загрузок лекций (по умолчанию `./uploads`) |
 | `SQLITE_PATH`   | (опционально) Путь к файлу SQLite (по умолчанию `data/mik_edu.db`) |
+| `QWEN_API_KEY`  | (опционально) Ключ Groq для генерации вопросов теста (console.groq.com). Без него кнопка «Сгенерировать с ИИ» не работает |
+| `QWEN_MODEL`    | (опционально) Модель Groq, по умолчанию `qwen/qwen3-32b` |
+| `QWEN_API_URL`  | (опционально) URL API Groq, по умолчанию `https://api.groq.com/openai/v1/chat/completions` |
 
-**Пример .env для хостинга с SQLite:**
+**Пример .env для хостинга с SQLite (с генерацией вопросов ИИ):**
 
 ```env
 PORT=8000
 JWT_SECRET=ваш-длинный-секретный-ключ-для-продакшена
 UPLOAD_DIR=./uploads
+# Генерация вопросов теста (Groq):
+QWEN_API_KEY=gsk_ваш_ключ_из_console_groq_com
+QWEN_MODEL=qwen/qwen3-32b
+QWEN_API_URL=https://api.groq.com/openai/v1/chat/completions
 ```
 
 **Пример для PostgreSQL:**
@@ -180,7 +187,15 @@ location / {
 
 ## Вариант 3: Docker Compose
 
-В корне проекта:
+В корне проекта создайте файл `.env` (рядом с `docker-compose.yml`) и задайте переменные:
+
+```env
+JWT_SECRET=ваш-длинный-секретный-ключ
+# Для генерации вопросов теста с ИИ (Groq):
+QWEN_API_KEY=gsk_ваш_ключ_из_console_groq_com
+```
+
+Затем:
 
 ```bash
 docker compose up -d --build
@@ -190,6 +205,8 @@ docker compose up -d --build
 - **Бэкенд (API):** http://localhost:8000  
 
 Фронтенд-контейнер проксирует запросы `/api` на бэкенд, поэтому приложение можно открывать по одному адресу: **http://localhost:3000**.
+
+Без `QWEN_API_KEY` в `.env` на сервере генерация вопросов теста («Сгенерировать с ИИ») будет возвращать ошибку «Генерация ИИ не настроена».
 
 ---
 
