@@ -35,8 +35,13 @@ export const api = {
         window.location.href = '/login';
         return Promise.reject(new Error('Unauthorized'));
       }
-      const j = r.json().catch(() => ({}));
-      if (!r.ok) return j.then((e) => Promise.reject(e || { error: 'Ошибка' }));
+      const j = r.json().catch(() => null);
+      if (!r.ok) {
+        return j.then((e) => {
+          const err = e && typeof e === 'object' && 'error' in e ? e : { error: `Ошибка ${r.status}: ${r.statusText}` };
+          return Promise.reject(err);
+        });
+      }
       return j.then((data) => ({ data }));
     });
   },

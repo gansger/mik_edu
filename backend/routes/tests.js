@@ -104,7 +104,8 @@ router.delete('/options/:oid', authRequired, wrap(requireAdminOrTeacherModule), 
 router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherModule), async (req, res) => {
   if (!QWEN_API_KEY) {
     return res.status(503).json({
-      error: 'Генерация ИИ не настроена. Для Docker: создайте файл .env в корне проекта (рядом с docker-compose.yml), добавьте QWEN_API_KEY=ваш_ключ_groq и выполните: docker compose down && docker compose up -d',
+      error: 'Генерация ИИ не настроена. В корне проекта (рядом с docker-compose.yml) создайте файл .env из .env.example и укажите QWEN_API_KEY=ваш_ключ_groq. Затем: docker compose down && docker compose up -d',
+      code: 'NO_API_KEY',
     });
   }
   const testId = req.params.id;
@@ -144,12 +145,12 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
     if (!resp.ok) {
       const errBody = await resp.text();
       console.error('Groq/Qwen API error:', resp.status, errBody);
-      let errMsg = 'Ошибка API';
+      let errMsg = 'Ошибка API Groq';
       try {
         const errJson = JSON.parse(errBody);
         errMsg = errJson.error?.message || errJson.message || errMsg;
       } catch (_) {}
-      return res.status(502).json({ error: errMsg });
+      return res.status(502).json({ error: errMsg, code: 'GROQ_API_ERROR' });
     }
     const dataRaw = await resp.json();
     const content = dataRaw.choices?.[0]?.message?.content;
@@ -201,7 +202,11 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
     return res.status(201).json({ generated: created.length, questions: created });
   } catch (err) {
     console.error('Qwen error:', err);
-    return res.status(502).json({ error: 'Ошибка ИИ: ' + (err.message || 'неизвестная') });
+    const isNetwork = err?.code === 'ECONNREFUSED' || err?.code === 'ETIMEDOUT' || err?.code === 'ENOTFOUND';
+    const msg = isNetwork
+      ? 'Сервер не может связаться с api.groq.com. Проверьте доступ в интернет и файрвол.'
+      : ('Ошибка ИИ: ' + (err.message || 'неизвестная'));
+    return res.status(502).json({ error: msg, code: isNetwork ? 'NETWORK_ERROR' : 'GROQ_ERROR' });
   }
 });
 

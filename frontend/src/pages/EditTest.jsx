@@ -101,7 +101,7 @@ export default function EditTest() {
         return api.get(`/tests/${id}`);
       })
       .then((r) => setTest(r.data))
-      .catch((err) => setAiError(err?.error || err?.message || 'Ошибка генерации'))
+      .catch((err) => setAiError(typeof err?.error === 'string' ? err.error : (err?.message || 'Ошибка генерации')))
       .finally(() => setAiLoading(false));
   };
 
