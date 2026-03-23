@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 80,
     proxy: {
       '/api': {
         // Бэкенд слушает на PORT=8000 (см. backend/.env)
