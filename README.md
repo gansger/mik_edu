@@ -70,13 +70,16 @@ npm install
 npm run dev
 ```
 
-Откройте в браузере: **http://localhost:5173**
+Откройте в браузере: **http://localhost:3000** (порт задан в `vite.config.js`)
 
 Логин по умолчанию: **admin** / **admin**.
 
 ---
 
 ## Развёртывание на веб-хосте
+
+**Docker на сервере (порты, VPN, команды):** см. **[SERVER.md](./SERVER.md)**.  
+Полная инструкция по переменным и без Docker: **[DEPLOY.md](./DEPLOY.md)**.
 
 ### Общие шаги
 
@@ -126,7 +129,7 @@ server {
     try_files $uri $uri/ /index.html;
   }
   location /api {
-    proxy_pass http://127.0.0.1:3001;
+    proxy_pass http://127.0.0.1:8000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

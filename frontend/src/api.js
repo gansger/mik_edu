@@ -45,6 +45,27 @@ export const api = {
       return j.then((data) => ({ data }));
     });
   },
+  put(url, body) {
+    return fetch(BASE + url, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(body),
+    }).then((r) => {
+      if (r.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        return Promise.reject(new Error('Unauthorized'));
+      }
+      const j = r.json().catch(() => null);
+      if (!r.ok) {
+        return j.then((e) => {
+          const err = e && typeof e === 'object' && 'error' in e ? e : { error: `Ошибка ${r.status}: ${r.statusText}` };
+          return Promise.reject(err);
+        });
+      }
+      return j.then((data) => ({ data }));
+    });
+  },
   patch(url, body) {
     return fetch(BASE + url, {
       method: 'PATCH',

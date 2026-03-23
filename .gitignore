@@ -37,3 +37,7 @@ backend/uploads/*
 # === Базы данных ===
 backend/data/*.db
 *.db
+
+# OpenVPN (секреты)
+vpn/*.ovpn
+vpn/auth.txt

@@ -16,7 +16,9 @@ import grades from './routes/grades.js';
 import materials from './routes/materials.js';
 import files from './routes/files.js';
 import tests from './routes/tests.js';
+import pythonCourse from './routes/pythonCourse.js';
 import { runMigrations } from './scripts/runMigrations.js';
+import { ensurePythonCourseTable } from './scripts/ensurePythonCourseTable.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -51,6 +53,7 @@ app.use('/api/grades', grades);
 app.use('/api/materials', materials);
 app.use('/api/files', files);
 app.use('/api/tests', tests);
+app.use('/api/python-course', pythonCourse);
 
 const distPath = join(__dirname, 'dist');
 if (existsSync(distPath)) {
@@ -77,6 +80,12 @@ async function start() {
       console.error('Миграции БД:', e.message);
       process.exit(1);
     }
+  }
+  try {
+    await ensurePythonCourseTable();
+  } catch (e) {
+    console.error('Таблица python_course_progress:', e.message);
+    process.exit(1);
   }
   app.listen(PORT, () => {
     console.log(`МИК-ОБРАЗОВАНИЕ API: http://localhost:${PORT}`);

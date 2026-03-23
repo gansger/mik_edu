@@ -13,6 +13,7 @@ import EditTest from './pages/EditTest';
 import StudentMaterials from './pages/StudentMaterials';
 import TakeTest from './pages/TakeTest';
 import Grades from './pages/Grades';
+import PythonCourse from './pages/PythonCourse';
 
 function PrivateRoute({ children, adminOnly, adminOrTeacher }) {
   const { user, loading } = useAuth();
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="admin/users" element={<PrivateRoute adminOnly><AdminUsers /></PrivateRoute>} />
         <Route path="edit-test/:id" element={<PrivateRoute adminOrTeacher><EditTest /></PrivateRoute>} />
         <Route path="materials" element={<StudentMaterials />} />
+        <Route path="courses/python" element={<PythonCourse />} />
         <Route path="grades" element={<Grades />} />
         <Route path="test/:id" element={<TakeTest />} />
       </Route>

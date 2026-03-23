@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import fetch from 'node-fetch';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import pool from '../config/db.js';
 import { authRequired, adminOnly } from '../middleware/auth.js';
 import { requireAdminOrTeacherModule, canTeacherAccessModule } from '../middleware/teacherModule.js';
@@ -7,6 +8,19 @@ import { requireAdminOrTeacherModule, canTeacherAccessModule } from '../middlewa
 const QWEN_API_KEY = process.env.QWEN_API_KEY || '';
 const QWEN_API_URL = process.env.QWEN_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen/qwen3-32b';
+
+/** Опционально: HTTP(S)-прокси для исходящих запросов к api.groq.com (если VPN на отдельном хосте) */
+const PROXY_URL = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
+
+function getHttpsProxyAgent() {
+  if (!PROXY_URL) return undefined;
+  try {
+    return new HttpsProxyAgent(PROXY_URL);
+  } catch (e) {
+    console.warn('[ИИ] Некорректный HTTPS_PROXY/HTTP_PROXY:', e.message);
+    return undefined;
+  }
+}
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -100,11 +114,12 @@ router.delete('/options/:oid', authRequired, wrap(requireAdminOrTeacherModule), 
   res.status(204).send();
 });
 
-// Сгенерировать вопросы теста с помощью Qwen (админ или преподаватель по модулю)
+// Сгенерировать вопросы теста через Groq API (console.groq.com) — админ или преподаватель по модулю
 router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherModule), async (req, res) => {
   if (!QWEN_API_KEY) {
     return res.status(503).json({
-      error: 'Генерация ИИ не настроена. В корне проекта (рядом с docker-compose.yml) создайте файл .env из .env.example и укажите QWEN_API_KEY=ваш_ключ_groq. Затем: docker compose down && docker compose up -d',
+      error:
+        'Генерация ИИ не настроена. В .env укажите QWEN_API_KEY (ключ API из console.groq.com). См. DEPLOY.md и .env.example.',
       code: 'NO_API_KEY',
     });
   }
@@ -126,11 +141,14 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
 
   const userPrompt = `Сгенерируй ${num} вопросов с вариантами ответов по теме: «${theme}». Верни только JSON в указанном формате.`;
 
+  const proxyAgent = getHttpsProxyAgent();
+
   try {
     const resp = await fetch(QWEN_API_URL, {
       method: 'POST',
+      agent: proxyAgent,
       headers: {
-        'Authorization': `Bearer ${QWEN_API_KEY}`,
+        Authorization: `Bearer ${QWEN_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -144,7 +162,7 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
     });
     if (!resp.ok) {
       const errBody = await resp.text();
-      console.error('Groq/Qwen API error:', resp.status, errBody);
+      console.error('Groq API error:', resp.status, errBody);
       let errMsg = 'Ошибка API Groq';
       try {
         const errJson = JSON.parse(errBody);
@@ -204,7 +222,7 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
     console.error('Qwen error:', err);
     const isNetwork = err?.code === 'ECONNREFUSED' || err?.code === 'ETIMEDOUT' || err?.code === 'ENOTFOUND';
     const msg = isNetwork
-      ? 'Сервер не может связаться с api.groq.com. Проверьте доступ в интернет и файрвол.'
+      ? 'Сервер не может связаться с api.groq.com. Проверьте интернет, VPN (docker-compose.vpn.yml) или HTTPS_PROXY, файрвол.'
       : ('Ошибка ИИ: ' + (err.message || 'неизвестная'));
     return res.status(502).json({ error: msg, code: isNetwork ? 'NETWORK_ERROR' : 'GROQ_ERROR' });
   }

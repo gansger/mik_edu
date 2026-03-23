@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Python Quest — курс для студентов</title>
+  <!-- Конфетти через CDN (требование ТЗ) -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    :root {
+      --bg: #0c1222;
+      --surface: #151d33;
+      --gold: #d4af37;
+      --gold-light: #f0d78c;
+      --text: #e8ecf4;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --danger: #ef4444;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+    /* Боковая панель с уровнями */
+    .sidebar {
+      width: 260px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid rgba(212, 175, 55, 0.2);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .sidebar h1 {
+      font-size: 1.05rem;
+      margin: 0 0 0.5rem;
+      color: var(--gold-light);
+      text-shadow: 0 0 20px rgba(212, 175, 55, 0.35);
+    }
+    .sync-badge {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(212, 175, 55, 0.15);
+    }
+    .sync-badge.ok { color: #86efac; border-color: rgba(34, 197, 94, 0.35); }
+    .sync-badge.warn { color: #fcd34d; }
+    details.programme {
+      width: 100%;
+      margin-bottom: 0.5rem;
+      border: 1px solid rgba(212, 175, 55, 0.2);
+      border-radius: 10px;
+      padding: 0.5rem 0.65rem;
+      background: rgba(0, 0, 0, 0.2);
+      max-height: 220px;
+      overflow: auto;
+    }
+    details.programme summary {
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--gold-light);
+      list-style: none;
+    }
+    details.programme summary::-webkit-details-marker { display: none; }
+    .programme-list {
+      margin: 0.5rem 0 0;
+      padding-left: 1.1rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .programme-list li { margin-bottom: 0.25rem; }
+    .level-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .level-btn:hover {
+      background: rgba(212, 175, 55, 0.12);
+      border-color: rgba(212, 175, 55, 0.35);
+    }
+    .level-btn.active {
+      border-color: var(--gold);
+      background: rgba(212, 175, 55, 0.18);
+      font-weight: 600;
+    }
+    .level-btn.locked {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .btn-reset {
+      margin-top: auto;
+      padding: 0.65rem;
+      border-radius: 10px;
+      border: 1px solid var(--danger);
+      background: transparent;
+      color: #fca5a5;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .btn-reset:hover {
+      background: rgba(239, 68, 68, 0.15);
+    }
+    /* Основная область */
+    .main {
+      flex: 1;
+      padding: 1.25rem;
+      overflow: auto;
+    }
+    .card {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(212, 175, 55, 0.15);
+    }
+    .card h2 {
+      margin-top: 0;
+      color: var(--gold-light);
+    }
+    .theory-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--gold);
+      margin: 0 0 0.5rem;
+      font-weight: 700;
+    }
+    .theory-block {
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: var(--text);
+      margin-bottom: 1.25rem;
+      padding: 1rem 1.15rem;
+      background: rgba(0, 0, 0, 0.28);
+      border-radius: 12px;
+      border-left: 4px solid var(--gold);
+      max-height: min(52vh, 520px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .theory-block h3 {
+      margin: 0.85rem 0 0.45rem;
+      font-size: 1rem;
+      color: var(--gold-light);
+    }
+    .theory-block h3:first-child { margin-top: 0; }
+    .theory-block p { margin: 0.5rem 0; color: var(--muted); }
+    .theory-block ul, .theory-block ol {
+      margin: 0.45rem 0;
+      padding-left: 1.25rem;
+      color: var(--muted);
+    }
+    .theory-block li { margin-bottom: 0.25rem; }
+    .theory-block strong { color: var(--text); }
+    .theory-block code {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 0.88rem;
+      background: #0a0f1a;
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      color: #a5f3fc;
+    }
+    .theory-block pre {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 0.82rem;
+      background: #0a0f1a;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      color: #a5f3fc;
+      margin: 0.5rem 0;
+      white-space: pre-wrap;
+    }
+    .practice-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin: 1rem 0 0.5rem;
+      font-weight: 700;
+    }
+    .task-desc {
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+    textarea.code-input {
+      width: 100%;
+      min-height: 140px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 14px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #0a0f1a;
+      color: #a5f3fc;
+      resize: vertical;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .btn {
+      padding: 0.65rem 1.25rem;
+      border-radius: 10px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #16a34a, #22c55e);
+      color: #fff;
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+    }
+    .msg {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+    }
+    .msg.ok {
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #86efac;
+    }
+    .msg.err {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fecaca;
+    }
+    /* Финальный экран */
+    #completion-screen {
+      display: none;
+      max-width: 640px;
+      margin: 2rem auto;
+      text-align: center;
+    }
+    #completion-screen.visible {
+      display: block;
+      animation: popIn 0.5s ease;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .completion-card {
+      background: linear-gradient(160deg, #1e293b 0%, #0f172a 40%, #1c1410 100%);
+      border: 2px solid var(--gold);
+      border-radius: 20px;
+      padding: 2rem 1.5rem;
+      box-shadow:
+        0 0 0 1px rgba(212, 175, 55, 0.35),
+        0 0 60px rgba(212, 175, 55, 0.12),
+        0 20px 50px rgba(0, 0, 0, 0.55);
+    }
+    .completion-card h2 {
+      font-size: 1.75rem;
+      margin: 0 0 0.5rem;
+      color: var(--gold-light);
+      text-shadow: 0 2px 20px rgba(212, 175, 55, 0.4);
+    }
+    .stats {
+      font-size: 1.1rem;
+      color: var(--muted);
+      margin: 1rem 0;
+    }
+    .stats strong {
+      color: var(--gold-light);
+      font-size: 1.25rem;
+    }
+    .certificate {
+      margin: 1.5rem auto;
+      max-width: 420px;
+      padding: 1.75rem 1.25rem;
+      background: linear-gradient(145deg, #fffef8 0%, #f5e6c8 100%);
+      color: #1c1917;
+      border: 4px double #b8860b;
+      border-radius: 8px;
+      box-shadow: inset 0 0 30px rgba(184, 134, 11, 0.15), 0 8px 24px rgba(0, 0, 0, 0.35);
+      font-family: Georgia, 'Times New Roman', serif;
+    }
+    .certificate h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #7c5e10;
+    }
+    .certificate .cert-title {
+      font-size: 1.05rem;
+      font-weight: bold;
+      margin: 0.75rem 0;
+      color: #292524;
+    }
+    .certificate .cert-date {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: #57534e;
+    }
+    .completion-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, #ca8a04, var(--gold));
+      color: #1c1917;
+      border: none;
+    }
+    #game-root.hidden {
+      display: none;
+    }
+    @media (max-width: 768px) {
+      .app { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .sidebar h1 { width: 100%; }
+      details.programme { max-height: 160px; width: 100%; }
+      .level-btn { flex: 1 1 40%; min-width: 120px; }
+      .btn-reset { width: 100%; margin-top: 0.5rem; }
+      .completion-card { padding: 1.25rem 1rem; }
+      .certificate { max-width: 100%; padding: 1.25rem 1rem; }
+      .theory-block { max-height: min(40vh, 360px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Уровни курса">
+      <h1>🐍 Python Quest</h1>
+      <div class="sync-badge" id="sync-status">Загрузка прогресса…</div>
+      <details class="programme" open>
+        <summary>Программа курса</summary>
+        <ol class="programme-list" id="programme-list"></ol>
+      </details>
+      <div id="level-buttons"></div>
+      <button type="button" class="btn-reset" id="btn-reset-progress">Сбросить прогресс</button>
+    </aside>
+    <div class="main">
+      <div id="game-root">
+        <div class="card" id="level-card">
+          <h2 id="level-title"></h2>
+          <p class="theory-label">Теория</p>
+          <div id="level-theory" class="theory-block" aria-label="Теория по теме"></div>
+          <p class="practice-label">Практика</p>
+          <p class="task-desc" id="level-task"></p>
+          <label for="code-area" class="sr-only" style="position:absolute;left:-9999px;">Код</label>
+          <textarea id="code-area" class="code-input" spellcheck="false" placeholder="# Введите ваш код Python здесь"></textarea>
+          <div class="actions">
+            <button type="button" class="btn btn-primary" id="btn-check">Проверить</button>
+            <button type="button" class="btn btn-secondary" id="btn-hint">Подсказка</button>
+          </div>
+          <div id="feedback"></div>
+        </div>
+      </div>
+      <div id="completion-screen" aria-live="polite">
+        <div class="completion-card">
+          <h2>Курс пройден! 🎉</h2>
+          <p class="stats">Пройдено уровней: <strong id="stat-levels"></strong></p>
+          <div class="certificate">
+            <h3>Сертификат</h3>
+            <p class="cert-title">Сертификат о прохождении курса Python Quest</p>
+            <p>Настоящим подтверждается успешное завершение интерактивного курса.</p>
+            <p class="cert-date" id="cert-date"></p>
+          </div>
+          <div class="completion-actions">
+            <button type="button" class="btn btn-gold" id="btn-restart-course">Пройти заново</button>
+            <button type="button" class="btn btn-secondary" id="btn-share">Поделиться</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="python-quest-data.js"></script>
+  <script>
+    /**
+     * Ключ для сохранения прогресса в localStorage (офлайн / без входа)
+     */
+    const STORAGE_KEY = 'pythonQuestProgress';
+    const API_BASE = '/api/python-course';
+
+    const levels = window.__PYTHON_QUEST_LEVELS;
+    if (!levels || !levels.length) {
+      console.error('Не загружен python-quest-data.js');
+    }
+
+    function fillProgrammeFromLevels() {
+      const ol = document.getElementById('programme-list');
+      if (!ol || !levels) return;
+      ol.innerHTML = '';
+      levels.forEach((lv, i) => {
+        const li = document.createElement('li');
+        const short = lv.title.replace(/^Уровень \d+:\s*/, '');
+        li.textContent = (i + 1) + '. ' + short;
+        ol.appendChild(li);
+      });
+    }
+    fillProgrammeFromLevels();
+
+    let currentLevelIndex = 0;
+    let saveTimer = null;
+
+    function getToken() {
+      try {
+        return localStorage.getItem('token');
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function setSyncStatus(text, cls) {
+      const el = document.getElementById('sync-status');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'sync-badge' + (cls ? ' ' + cls : '');
+    }
+
+    async function fetchServerProgress() {
+      const token = getToken();
+      if (!token) return null;
+      const r = await fetch(`${API_BASE}/me`, {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (r.status === 401) return null;
+      if (!r.ok) throw new Error('server');
+      return r.json();
+    }
+
+    async function pushServerProgress() {
+      const token = getToken();
+      if (!token) return;
+      const r = await fetch(`${API_BASE}/progress`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({ currentLevelIndex: currentLevelIndex }),
+      });
+      if (!r.ok && r.status !== 401) {
+        console.warn('Сохранение на сервер', r.status);
+      }
+      if (r.ok) setSyncStatus('Прогресс сохранён в аккаунте', 'ok');
+    }
+
+    async function deleteServerProgress() {
+      const token = getToken();
+      if (!token) return;
+      await fetch(`${API_BASE}/progress`, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token },
+      });
+    }
+
+    function scheduleServerSave() {
+      if (!getToken()) return;
+      setSyncStatus('Сохранение…', '');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        pushServerProgress().catch(() => setSyncStatus('Ошибка синхронизации', 'warn'));
+      }, 400);
+    }
+
+    function normalizeCode(code) {
+      return String(code || '')
+        .replace(/#.*$/gm, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+    }
+
+    /**
+     * Проверка ответа студента для текущего уровня
+     * @param {number} levelIndex
+     * @param {string} code
+     * @returns {boolean}
+     */
+    function checkAnswer(levelIndex, code) {
+      const level = levels[levelIndex];
+      if (!level) return false;
+      const c = normalizeCode(code);
+      return level.check(c);
+    }
+
+    function loadProgressLocal() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (typeof data.currentLevelIndex === 'number') {
+          const idx = Math.min(Math.max(0, data.currentLevelIndex), levels.length);
+          currentLevelIndex = idx;
+        }
+      } catch (e) {
+        console.warn('Не удалось прочитать прогресс', e);
+      }
+    }
+
+    function saveProgress() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          currentLevelIndex: currentLevelIndex
+        }));
+      } catch (e) {
+        console.warn('Не удалось сохранить прогресс', e);
+      }
+      scheduleServerSave();
+    }
+
+    async function resetProgress() {
+      currentLevelIndex = 0;
+      localStorage.removeItem(STORAGE_KEY);
+      try {
+        await deleteServerProgress();
+      } catch (_) {}
+      setSyncStatus(getToken() ? 'Прогресс сброшен' : 'Прогресс только в браузере', getToken() ? 'ok' : 'warn');
+      hideCompletion();
+      renderLevelButtons();
+      renderCurrentLevel();
+    }
+
+    function hideCompletion() {
+      document.getElementById('completion-screen').classList.remove('visible');
+      document.getElementById('game-root').classList.remove('hidden');
+    }
+
+    function showCompletion() {
+      document.getElementById('game-root').classList.add('hidden');
+      const screen = document.getElementById('completion-screen');
+      screen.classList.add('visible');
+      document.getElementById('stat-levels').textContent = levels.length + ' из ' + levels.length;
+      const now = new Date();
+      document.getElementById('cert-date').textContent =
+        'Дата: ' + now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      // Конфетти (canvas-confetti из CDN)
+      if (typeof confetti === 'function') {
+        const duration = 2500;
+        const end = Date.now() + duration;
+        (function frame() {
+          confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 } });
+          confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 } });
+          if (Date.now() < end) requestAnimationFrame(frame);
+        })();
+      }
+    }
+
+    function renderLevelButtons() {
+      const wrap = document.getElementById('level-buttons');
+      wrap.innerHTML = '';
+      levels.forEach((lv, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'level-btn' + (i === currentLevelIndex ? ' active' : '') + (i > currentLevelIndex ? ' locked' : '');
+        btn.textContent = lv.title.replace(/^Уровень \d+:\s*/, 'Ур. ' + (i + 1) + ' ');
+        btn.disabled = i > currentLevelIndex;
+        btn.addEventListener('click', () => {
+          if (i <= currentLevelIndex) {
+            currentLevelIndex = i;
+            saveProgress();
+            renderLevelButtons();
+            renderCurrentLevel();
+            document.getElementById('feedback').innerHTML = '';
+          }
+        });
+        wrap.appendChild(btn);
+      });
+    }
+
+    function renderCurrentLevel() {
+      if (currentLevelIndex >= levels.length) {
+        showCompletion();
+        return;
+      }
+      const lv = levels[currentLevelIndex];
+      document.getElementById('level-title').textContent = lv.title;
+      const theoryEl = document.getElementById('level-theory');
+      if (theoryEl) theoryEl.innerHTML = lv.theory || '<p class="text-muted">Теория для этого уровня не задана.</p>';
+      document.getElementById('level-task').textContent = lv.task;
+      document.getElementById('code-area').value = '';
+      document.getElementById('feedback').innerHTML = '';
+    }
+
+    /**
+     * Переход на следующий уровень или финальный экран
+     */
+    function nextLevel() {
+      currentLevelIndex += 1;
+      saveProgress();
+      if (currentLevelIndex >= levels.length) {
+        showCompletion();
+        renderLevelButtons();
+        return;
+      }
+      renderLevelButtons();
+      renderCurrentLevel();
+    }
+
+    document.getElementById('btn-check').addEventListener('click', () => {
+      const code = document.getElementById('code-area').value;
+      const fb = document.getElementById('feedback');
+      if (currentLevelIndex >= levels.length) return;
+
+      if (checkAnswer(currentLevelIndex, code)) {
+        fb.innerHTML = '<div class="msg ok">Отлично! Задание выполнено.</div>';
+        setTimeout(() => nextLevel(), 600);
+      } else {
+        fb.innerHTML = '<div class="msg err">Пока не совсем так. Перечитайте задание и попробуйте снова.</div>';
+      }
+    });
+
+    document.getElementById('btn-hint').addEventListener('click', () => {
+      const lv = levels[currentLevelIndex];
+      if (!lv) return;
+      alert('Подсказка:\n\n' + lv.hint);
+    });
+
+    document.getElementById('btn-reset-progress').addEventListener('click', () => {
+      if (confirm('Сбросить весь прогресс курса?')) void resetProgress();
+    });
+
+    document.getElementById('btn-restart-course').addEventListener('click', () => {
+      void resetProgress();
+    });
+
+    document.getElementById('btn-share').addEventListener('click', async () => {
+      const text = 'Я прошел курс Python Quest! 🐍';
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('Текст скопирован в буфер обмена!');
+      } catch (e) {
+        prompt('Скопируйте текст:', text);
+      }
+    });
+
+    async function bootstrap() {
+      loadProgressLocal();
+      const token = getToken();
+      if (token) {
+        try {
+          const srv = await fetchServerProgress();
+          if (srv && srv.hasServerRecord) {
+            currentLevelIndex = Math.min(Math.max(0, srv.currentLevelIndex), levels.length);
+            if (srv.completed) currentLevelIndex = levels.length;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentLevelIndex }));
+            setSyncStatus('Прогресс сохранён в аккаунте', 'ok');
+          } else if (srv && currentLevelIndex > 0) {
+            void pushServerProgress();
+            setSyncStatus('Локальный прогресс отправлен в аккаунт', 'ok');
+          } else {
+            setSyncStatus('Прогресс будет сохраняться в аккаунте', 'ok');
+          }
+        } catch (e) {
+          setSyncStatus('Сервер недоступен — локальный прогресс', 'warn');
+        }
+      } else {
+        setSyncStatus('Войдите в систему, чтобы сохранять прогресс в аккаунте', 'warn');
+      }
+
+      if (currentLevelIndex >= levels.length) {
+        showCompletion();
+        renderLevelButtons();
+      } else {
+        hideCompletion();
+        renderLevelButtons();
+        renderCurrentLevel();
+      }
+    }
+
+    void bootstrap();
+  </script>
+</body>
+</html>
