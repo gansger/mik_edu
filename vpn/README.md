@@ -24,7 +24,7 @@ auth-user-pass /gluetun/auth.txt
 docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d --build
 ```
 
-Проверка: `curl -s http://localhost:8000/health` — затем в UI сгенерируйте вопросы теста с ИИ.
+Проверка: `curl -s http://localhost:8000/health` и веб: `curl -sI http://localhost/` (фронт в Docker на порту **80**, не 3000). Затем в UI сгенерируйте вопросы теста с ИИ.
 
 ## Без VPN (как раньше)
 

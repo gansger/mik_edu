@@ -37,6 +37,7 @@ services:
       dockerfile: Dockerfile
     container_name: mik-edu-frontend
     restart: unless-stopped
+    # nginx внутри контейнера слушает 80 (см. frontend/nginx.conf)
     ports:
       - "80:80"
     depends_on:

@@ -134,3 +134,17 @@ DATABASE_URL=postgresql://USER:PASSWORD@ХОСТ:5432/ИМЯ_БД
 | Остановка | `docker compose down` |
 
 Подробнее об окружении и без прокси/VPN: **`DEPLOY.md`**.
+
+### После смены порта фронта (3000 → 80) на сервере
+
+Старый образ мог остаться в кэше. Выполните пересборку и пересоздание контейнеров:
+
+```bash
+git pull
+docker compose build --no-cache frontend
+docker compose up -d --force-recreate
+```
+
+С VPN: `docker compose -f docker-compose.yml -f docker-compose.vpn.yml build --no-cache frontend` и затем `up -d --force-recreate`.
+
+Проверка: `curl -sI http://127.0.0.1/` — ответ от nginx; сайт в браузере: `http://IP-СЕРВЕРА/` (без `:3000`).
