@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import fetch from 'node-fetch';
-import { HttpsProxyAgent } from 'https-proxy-agent';
 import pool from '../config/db.js';
 import { authRequired, adminOnly } from '../middleware/auth.js';
 import { requireAdminOrTeacherModule, canTeacherAccessModule } from '../middleware/teacherModule.js';
@@ -16,19 +15,6 @@ function groqUrlTypoHint(url) {
     return 'В QWEN_API_URL указан api.grok.com — это ошибка. Нужен API Groq: https://api.groq.com/openai/v1/chat/completions (буква «q», ключ на console.groq.com).';
   }
   return null;
-}
-
-/** Опционально: HTTP(S)-прокси для исходящих запросов к api.groq.com (если VPN на отдельном хосте) */
-const PROXY_URL = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
-
-function getHttpsProxyAgent() {
-  if (!PROXY_URL) return undefined;
-  try {
-    return new HttpsProxyAgent(PROXY_URL);
-  } catch (e) {
-    console.warn('[ИИ] Некорректный HTTPS_PROXY/HTTP_PROXY:', e.message);
-    return undefined;
-  }
 }
 
 const router = Router();
@@ -154,12 +140,9 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
 
   const userPrompt = `Сгенерируй ${num} вопросов с вариантами ответов по теме: «${theme}». Верни только JSON в указанном формате.`;
 
-  const proxyAgent = getHttpsProxyAgent();
-
   try {
     const resp = await fetch(QWEN_API_URL, {
       method: 'POST',
-      agent: proxyAgent,
       headers: {
         Authorization: `Bearer ${QWEN_API_KEY}`,
         'Content-Type': 'application/json',
@@ -238,7 +221,7 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
     const msg = typoHint
       ? typoHint
       : isNetwork
-        ? 'Сервер не может связаться с api.groq.com. Проверьте интернет, VPN (docker-compose.vpn.yml) или HTTPS_PROXY, файрвол.'
+        ? 'Сервер не может связаться с api.groq.com. Проверьте интернет и файрвол.'
         : 'Ошибка ИИ: ' + (err.message || 'неизвестная');
     return res.status(502).json({ error: msg, code: isNetwork ? 'NETWORK_ERROR' : 'GROQ_ERROR' });
   }
