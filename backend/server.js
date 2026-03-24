@@ -87,8 +87,8 @@ async function start() {
     console.error('Таблица python_course_progress:', e.message);
     process.exit(1);
   }
-  app.listen(PORT, () => {
-    console.log(`МИК-ОБРАЗОВАНИЕ API: http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`МИК-ОБРАЗОВАНИЕ API: http://0.0.0.0:${PORT}`);
   });
 }
 
