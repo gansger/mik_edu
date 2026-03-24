@@ -9,6 +9,15 @@ const QWEN_API_KEY = process.env.QWEN_API_KEY || '';
 const QWEN_API_URL = process.env.QWEN_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen/qwen3-32b';
 
+/** Частая опечатка: grok.com вместо groq.com — другой хост, DNS не резолвится */
+function groqUrlTypoHint(url) {
+  const u = (url || '').toLowerCase();
+  if (u.includes('grok.com') && !u.includes('groq.com')) {
+    return 'В QWEN_API_URL указан api.grok.com — это ошибка. Нужен API Groq: https://api.groq.com/openai/v1/chat/completions (буква «q», ключ на console.groq.com).';
+  }
+  return null;
+}
+
 /** Опционально: HTTP(S)-прокси для исходящих запросов к api.groq.com (если VPN на отдельном хосте) */
 const PROXY_URL = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
 
@@ -123,6 +132,10 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
       code: 'NO_API_KEY',
     });
   }
+  const typo = groqUrlTypoHint(QWEN_API_URL);
+  if (typo) {
+    return res.status(503).json({ error: typo, code: 'BAD_GROQ_URL' });
+  }
   const testId = req.params.id;
   const { topic, count = 5 } = req.body;
   const theme = (topic || '').trim();
@@ -221,9 +234,12 @@ router.post('/:id/generate-questions', authRequired, wrap(requireAdminOrTeacherM
   } catch (err) {
     console.error('Qwen error:', err);
     const isNetwork = err?.code === 'ECONNREFUSED' || err?.code === 'ETIMEDOUT' || err?.code === 'ENOTFOUND';
-    const msg = isNetwork
-      ? 'Сервер не может связаться с api.groq.com. Проверьте интернет, VPN (docker-compose.vpn.yml) или HTTPS_PROXY, файрвол.'
-      : ('Ошибка ИИ: ' + (err.message || 'неизвестная'));
+    const typoHint = groqUrlTypoHint(String(err?.message || '') + QWEN_API_URL);
+    const msg = typoHint
+      ? typoHint
+      : isNetwork
+        ? 'Сервер не может связаться с api.groq.com. Проверьте интернет, VPN (docker-compose.vpn.yml) или HTTPS_PROXY, файрвол.'
+        : 'Ошибка ИИ: ' + (err.message || 'неизвестная');
     return res.status(502).json({ error: msg, code: isNetwork ? 'NETWORK_ERROR' : 'GROQ_ERROR' });
   }
 });

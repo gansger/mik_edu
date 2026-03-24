@@ -7,6 +7,23 @@ function getHeaders() {
   return h;
 }
 
+/** Разбор тела ошибки (JSON от API или фрагмент HTML от nginx) */
+function rejectWithParsedError(r) {
+  return r.text().then((text) => {
+    try {
+      const j = text ? JSON.parse(text) : null;
+      if (j && typeof j === 'object' && 'error' in j) {
+        return Promise.reject(j);
+      }
+    } catch (_) {}
+    const preview = (text || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+    return Promise.reject({
+      error: preview || `Ошибка ${r.status}: ${r.statusText}`,
+      code: 'HTTP_ERROR',
+    });
+  });
+}
+
 export const api = {
   get(url) {
     return fetch(BASE + url, { headers: getHeaders() }).then((r) => {
@@ -15,9 +32,8 @@ export const api = {
         window.location.href = '/login';
         return Promise.reject(new Error('Unauthorized'));
       }
-      const j = r.json();
-      if (!r.ok) return j.then((e) => Promise.reject(e));
-      return j;
+      if (!r.ok) return rejectWithParsedError(r);
+      return r.json();
     }).then((data) => ({ data }));
   },
   post(url, body, isForm) {
@@ -35,14 +51,8 @@ export const api = {
         window.location.href = '/login';
         return Promise.reject(new Error('Unauthorized'));
       }
-      const j = r.json().catch(() => null);
-      if (!r.ok) {
-        return j.then((e) => {
-          const err = e && typeof e === 'object' && 'error' in e ? e : { error: `Ошибка ${r.status}: ${r.statusText}` };
-          return Promise.reject(err);
-        });
-      }
-      return j.then((data) => ({ data }));
+      if (!r.ok) return rejectWithParsedError(r);
+      return r.json().then((data) => ({ data }));
     });
   },
   put(url, body) {
@@ -56,14 +66,8 @@ export const api = {
         window.location.href = '/login';
         return Promise.reject(new Error('Unauthorized'));
       }
-      const j = r.json().catch(() => null);
-      if (!r.ok) {
-        return j.then((e) => {
-          const err = e && typeof e === 'object' && 'error' in e ? e : { error: `Ошибка ${r.status}: ${r.statusText}` };
-          return Promise.reject(err);
-        });
-      }
-      return j.then((data) => ({ data }));
+      if (!r.ok) return rejectWithParsedError(r);
+      return r.json().then((data) => ({ data }));
     });
   },
   patch(url, body) {
@@ -77,9 +81,8 @@ export const api = {
         window.location.href = '/login';
         return Promise.reject(new Error('Unauthorized'));
       }
-      const j = r.json();
-      if (!r.ok) return j.then((e) => Promise.reject(e));
-      return j.then((data) => ({ data }));
+      if (!r.ok) return rejectWithParsedError(r);
+      return r.json().then((data) => ({ data }));
     });
   },
   delete(url) {

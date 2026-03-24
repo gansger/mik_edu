@@ -6,6 +6,7 @@ import pool from '../config/db.js';
 
 const router = Router();
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function authForFile(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
@@ -22,7 +23,7 @@ function authForFile(req, res, next) {
 }
 
 // Get file for lecture: student only if lecture belongs to their group
-router.get('/lecture/:id', authForFile, async (req, res) => {
+router.get('/lecture/:id', authForFile, wrap(async (req, res) => {
   const lectureId = req.params.id;
   const r = await pool.query(
     `SELECT l.id, l.file_path, l.file_type, l.title, l.link_url, m.subject_id, s.group_id
@@ -66,7 +67,16 @@ router.get('/lecture/:id', authForFile, async (req, res) => {
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(lecture.title)}"`);
   }
-  createReadStream(filePath).pipe(res);
-});
+  const stream = createReadStream(filePath);
+  stream.on('error', (err) => {
+    console.error('File stream error:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Ошибка чтения файла' });
+    } else {
+      res.destroy(err);
+    }
+  });
+  stream.pipe(res);
+}));
 
 export default router;
