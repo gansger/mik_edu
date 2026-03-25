@@ -70,7 +70,7 @@ npm install
 npm run dev
 ```
 
-Откройте в браузере: **http://localhost/** (порт **80** в `vite.config.js`; для порта 80 на Linux/macOS обычно нужен `sudo`, в Windows — терминал от администратора)
+Откройте в браузере: **http://localhost:5173/** (порт задаётся в `frontend/vite.config.js`; прокси `/api` идёт на backend `:8000`)
 
 Логин по умолчанию: **admin** / **admin**.
 

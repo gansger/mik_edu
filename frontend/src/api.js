@@ -10,6 +10,13 @@ function getHeaders() {
 /** Разбор тела ошибки (JSON от API или фрагмент HTML от nginx) */
 function rejectWithParsedError(r) {
   return r.text().then((text) => {
+    if (r.status === 502 || r.status === 503) {
+      return Promise.reject({
+        error:
+          'Ошибка 502/503: nginx не достучался до backend. На сервере: docker compose ps и logs для backend и frontend.',
+        code: 'BAD_GATEWAY',
+      });
+    }
     try {
       const j = text ? JSON.parse(text) : null;
       if (j && typeof j === 'object' && 'error' in j) {

@@ -156,7 +156,7 @@ npm ci
 npm run dev
 ```
 
-В `frontend/vite.config.js` указан proxy `/api` → `http://localhost:8000`. Сайт: **http://localhost/** (порт 80).
+В `frontend/vite.config.js` указан proxy `/api` → `http://localhost:8000`. Локальная разработка: **`npm run dev`** во `frontend` — **http://localhost:5173/** (порт в конфиге Vite).
 
 ### Frontend (сборка под nginx)
 
