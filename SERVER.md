@@ -58,7 +58,7 @@ docker compose exec frontend curl -fsS http://backend:8000/health
 
 Конфиг nginx **внутри** образа фронта — только **`frontend/nginx.conf`**. Файл **`nginx.edge-proxy.example.conf`** в корне — отдельный пример внешнего прокси; не подменяйте им `default.conf` в контейнере фронта (иначе возможен proxy на самого себя и снова 502).
 
-Если **`frontend` в статусе `Restarting`** — смотрите `docker compose logs frontend`: часто падение nginx из‑за резолва `backend` при старте. В **`frontend/nginx.conf`** используется `resolver 127.0.0.11` и переменная в `proxy_pass`, чтобы имя `backend` резолвилось при запросе, а не при загрузке конфига.
+Перед nginx контейнер фронта запускает **`wait-backend.sh`**: до **90 с** опрашивается `http://backend:8000/health`, затем стартует nginx с обычным `proxy_pass http://backend:8000` (без resolver). Если **`frontend` в `Restarting`** — смотрите `docker compose logs frontend`: чаще всего backend не поднялся за отведённое время или не в сети `mik_edu`.
 
 ## Полезные команды
 
