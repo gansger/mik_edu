@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 
@@ -219,73 +219,62 @@ CREATE TABLE IF NOT EXISTS python_course_progress (
 CREATE INDEX IF NOT EXISTS idx_python_course_progress_user ON python_course_progress(user_id);
 `;
 
-async function initDb() {
-  const { default: pool } = await import('../config/db.js');
-
-  const SQL = useSqlite ? SQL_SQLITE : SQL_PG;
-
-  if (useSqlite) {
-    const dataDir = join(__dirname, '..', 'data');
-    if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-    const statements = SQL.split(';').map((s) => s.trim()).filter(Boolean);
-    for (const stmt of statements) await pool.query(stmt);
-    // Миграция SQLite (один раз): добавить роль teacher в users
-    await pool.query(`CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)`);
-    const m = await pool.query(`SELECT 1 FROM _migrations WHERE name = $1`, ['users_teacher_role']);
-    const hasUsers = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'`);
-    if (!m.rows?.length && hasUsers.rows?.length > 0) {
-      await pool.query(`DROP TABLE IF EXISTS teacher_assignments`);
-      await pool.query(`DROP TABLE IF EXISTS users_new`);
-      await pool.query(`CREATE TABLE users_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        login VARCHAR(100) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'student', 'teacher')),
-        full_name VARCHAR(255),
-        group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`);
-      await pool.query(`INSERT INTO users_new SELECT * FROM users`);
-      await pool.query(`DROP TABLE users`);
-      await pool.query(`ALTER TABLE users_new RENAME TO users`);
-      await pool.query(`CREATE TABLE IF NOT EXISTS teacher_assignments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-        subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-        UNIQUE(teacher_id, group_id, subject_id)
-      )`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_teacher_assignments_teacher ON teacher_assignments(teacher_id)`);
-      await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['users_teacher_role']);
-      console.log('Миграция: добавлена роль преподавателя (teacher)');
-    }
-    const m2 = await pool.query(`SELECT 1 FROM _migrations WHERE name = $1`, ['test_questions']);
-    const hasTests = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='tests'`);
-    if (!m2.rows?.length && hasTests.rows?.length > 0) {
-      await pool.query(`CREATE TABLE IF NOT EXISTS test_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, test_id INTEGER NOT NULL REFERENCES tests(id) ON DELETE CASCADE, text TEXT NOT NULL, points INTEGER DEFAULT 1, order_index INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-      await pool.query(`CREATE TABLE IF NOT EXISTS test_options (id INTEGER PRIMARY KEY AUTOINCREMENT, question_id INTEGER NOT NULL REFERENCES test_questions(id) ON DELETE CASCADE, text TEXT NOT NULL, is_correct INTEGER DEFAULT 0, order_index INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-      await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['test_questions']);
-      console.log('Миграция: созданы таблицы тестирования');
-    }
-    const mLectureLink = await pool.query(`SELECT 1 FROM _migrations WHERE name = $1`, ['lectures_link_url']);
-    const hasLectures = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='lectures'`);
-    if (!mLectureLink.rows?.length && hasLectures.rows?.length > 0) {
-      const info = await pool.query(`SELECT name FROM pragma_table_info('lectures') WHERE name = 'link_url'`);
-      if (!info.rows?.length) {
-        await pool.query(`ALTER TABLE lectures ADD COLUMN link_url TEXT`);
-        await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['lectures_link_url']);
-        console.log('Миграция: добавлена колонка link_url в lectures');
-      }
-    }
-  } else {
-    await pool.query(SQL);
-    const mLectureLink = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'lectures' AND column_name = 'link_url'`);
-    if (!mLectureLink.rows?.length) {
+/** DDL + встроенные миграции init-db для SQLite (идемпотентно). */
+export async function applySqliteInitSteps(pool) {
+  const dataDir = join(__dirname, '..', 'data');
+  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+  const statements = SQL_SQLITE.split(';').map((s) => s.trim()).filter(Boolean);
+  for (const stmt of statements) await pool.query(stmt);
+  await pool.query(`CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)`);
+  const m = await pool.query(`SELECT 1 FROM _migrations WHERE name = $1`, ['users_teacher_role']);
+  const hasUsers = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'`);
+  if (!m.rows?.length && hasUsers.rows?.length > 0) {
+    await pool.query(`DROP TABLE IF EXISTS teacher_assignments`);
+    await pool.query(`DROP TABLE IF EXISTS users_new`);
+    await pool.query(`CREATE TABLE users_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      login VARCHAR(100) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'student', 'teacher')),
+      full_name VARCHAR(255),
+      group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    await pool.query(`INSERT INTO users_new SELECT * FROM users`);
+    await pool.query(`DROP TABLE users`);
+    await pool.query(`ALTER TABLE users_new RENAME TO users`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS teacher_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+      subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      UNIQUE(teacher_id, group_id, subject_id)
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_teacher_assignments_teacher ON teacher_assignments(teacher_id)`);
+    await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['users_teacher_role']);
+    console.log('Миграция: добавлена роль преподавателя (teacher)');
+  }
+  const m2 = await pool.query(`SELECT 1 FROM _migrations WHERE name = $1`, ['test_questions']);
+  const hasTests = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='tests'`);
+  if (!m2.rows?.length && hasTests.rows?.length > 0) {
+    await pool.query(`CREATE TABLE IF NOT EXISTS test_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, test_id INTEGER NOT NULL REFERENCES tests(id) ON DELETE CASCADE, text TEXT NOT NULL, points INTEGER DEFAULT 1, order_index INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS test_options (id INTEGER PRIMARY KEY AUTOINCREMENT, question_id INTEGER NOT NULL REFERENCES test_questions(id) ON DELETE CASCADE, text TEXT NOT NULL, is_correct INTEGER DEFAULT 0, order_index INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+    await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['test_questions']);
+    console.log('Миграция: созданы таблицы тестирования');
+  }
+  const mLectureLink = await pool.query(`SELECT 1 FROM _migrations WHERE name = $1`, ['lectures_link_url']);
+  const hasLectures = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='lectures'`);
+  if (!mLectureLink.rows?.length && hasLectures.rows?.length > 0) {
+    const info = await pool.query(`SELECT name FROM pragma_table_info('lectures') WHERE name = 'link_url'`);
+    if (!info.rows?.length) {
       await pool.query(`ALTER TABLE lectures ADD COLUMN link_url TEXT`);
+      await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['lectures_link_url']);
       console.log('Миграция: добавлена колонка link_url в lectures');
     }
   }
+}
 
+export async function ensureAdminUser(pool) {
   const { rows } = await pool.query("SELECT 1 FROM users WHERE role = 'admin'");
   if (!rows || rows.length === 0) {
     const hash = await bcrypt.hash('admin', 10);
@@ -295,12 +284,51 @@ async function initDb() {
     );
     console.log('Создан пользователь admin / пароль: admin');
   }
+}
+
+/**
+ * Первый запуск Docker / пустой volume: без `init-db` таблицы нет — логин падает.
+ * Создаёт схему и admin так же, как `npm run init-db` для SQLite.
+ */
+export async function bootstrapSqliteIfEmpty(pool) {
+  const useSqlite = !process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('sqlite');
+  if (!useSqlite) return;
+  const chk = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'`);
+  if (chk.rows?.length) return;
+  console.log('[DB] SQLite без таблицы users — автоматическое создание схемы (как init-db).');
+  await applySqliteInitSteps(pool);
+  await ensureAdminUser(pool);
+}
+
+async function initDb() {
+  const { default: pool } = await import('../config/db.js');
+
+  const SQL = useSqlite ? SQL_SQLITE : SQL_PG;
+
+  if (useSqlite) {
+    await applySqliteInitSteps(pool);
+  } else {
+    await pool.query(SQL);
+    const mLectureLink = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'lectures' AND column_name = 'link_url'`);
+    if (!mLectureLink.rows?.length) {
+      await pool.query(`ALTER TABLE lectures ADD COLUMN link_url TEXT`);
+      console.log('Миграция: добавлена колонка link_url в lectures');
+    }
+  }
+
+  await ensureAdminUser(pool);
   console.log('База данных инициализирована.', useSqlite ? '(SQLite)' : '(PostgreSQL)');
   if (useSqlite) process.exit(0);
   else await pool.end();
 }
 
-initDb().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const isMain =
+  Boolean(process.argv[1]) &&
+  fileURLToPath(import.meta.url) === fileURLToPath(pathToFileURL(process.argv[1]).href);
+
+if (isMain) {
+  initDb().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

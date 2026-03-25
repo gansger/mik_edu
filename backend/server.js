@@ -19,6 +19,7 @@ import tests from './routes/tests.js';
 import pythonCourse from './routes/pythonCourse.js';
 import { runMigrations } from './scripts/runMigrations.js';
 import { ensurePythonCourseTable } from './scripts/ensurePythonCourseTable.js';
+import { bootstrapSqliteIfEmpty } from './scripts/initDb.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -75,6 +76,7 @@ app.use((err, req, res, next) => {
 async function start() {
   if (useSqlite) {
     try {
+      await bootstrapSqliteIfEmpty(pool);
       await runMigrations(pool);
     } catch (e) {
       console.error('Миграции БД:', e.message);
