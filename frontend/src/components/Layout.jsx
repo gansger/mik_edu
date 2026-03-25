@@ -13,7 +13,6 @@ export default function Layout() {
   const navStudent = (
     <>
       <NavLink to="/materials" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMenu}>Материалы</NavLink>
-      <NavLink to="/courses/python" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMenu}>Курсы: Python</NavLink>
       <NavLink to="/grades" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMenu}>Моя успеваемость</NavLink>
     </>
   );

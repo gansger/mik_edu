@@ -275,15 +275,54 @@ export async function applySqliteInitSteps(pool) {
 }
 
 export async function ensureAdminUser(pool) {
-  const { rows } = await pool.query("SELECT 1 FROM users WHERE role = 'admin'");
-  if (!rows || rows.length === 0) {
-    const hash = await bcrypt.hash('admin', 10);
+  const expectedLogin = 'admin';
+  const expectedPassword = process.env.ADMIN_PASSWORD || 'admin';
+
+  const r = await pool.query(
+    'SELECT id, login, password_hash, role FROM users WHERE login = $1 LIMIT 1',
+    [expectedLogin]
+  );
+
+  if (!r.rows?.length) {
+    const hash = await bcrypt.hash(expectedPassword, 10);
     await pool.query(
       "INSERT INTO users (login, password_hash, role, full_name) VALUES ($1, $2, 'admin', 'Администратор')",
-      ['admin', hash]
+      [expectedLogin, hash]
     );
-    console.log('Создан пользователь admin / пароль: admin');
+    console.log(`Создан пользователь ${expectedLogin} / пароль: ${expectedPassword}`);
+    return;
   }
+
+  const u = r.rows[0];
+  const passwordOk = await bcrypt.compare(expectedPassword, u.password_hash);
+  const roleOk = u.role === 'admin';
+
+  if (passwordOk && roleOk) return;
+
+  const hash = passwordOk ? u.password_hash : await bcrypt.hash(expectedPassword, 10);
+  await pool.query(
+    `UPDATE users
+     SET password_hash = $1,
+         role = 'admin'
+     WHERE id = $2`,
+    [hash, u.id]
+  );
+  console.log(`Обновлён админ: пароль=${expectedPassword} (SQLite)`);
+}
+
+/** Добавляет `lectures.link_url` для SQLite, если колонка отсутствует. */
+export async function ensureSqliteLecturesLinkUrl(pool) {
+  // Нужна таблица _migrations для idempotent-пометки.
+  await pool.query(`CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)`);
+  const hasLectures = await pool.query(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='lectures'`);
+  if (!hasLectures.rows?.length) return;
+
+  const info = await pool.query(`SELECT name FROM pragma_table_info('lectures') WHERE name = 'link_url'`);
+  if (info.rows?.length) return;
+
+  await pool.query(`ALTER TABLE lectures ADD COLUMN link_url TEXT`);
+  await pool.query(`INSERT OR IGNORE INTO _migrations (name) VALUES ($1)`, ['lectures_link_url']);
+  console.log('Автомиграция: добавлена колонка lectures.link_url (SQLite)');
 }
 
 /**

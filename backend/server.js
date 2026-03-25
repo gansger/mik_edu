@@ -19,7 +19,7 @@ import tests from './routes/tests.js';
 import pythonCourse from './routes/pythonCourse.js';
 import { runMigrations } from './scripts/runMigrations.js';
 import { ensurePythonCourseTable } from './scripts/ensurePythonCourseTable.js';
-import { bootstrapSqliteIfEmpty } from './scripts/initDb.js';
+import { bootstrapSqliteIfEmpty, ensureSqliteLecturesLinkUrl, ensureAdminUser } from './scripts/initDb.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -77,6 +77,10 @@ async function start() {
   if (useSqlite) {
     try {
       await bootstrapSqliteIfEmpty(pool);
+      // Старые SQLite-дампы могли не содержать lectures.link_url, а запрос в /api/files/lecture его всегда использует.
+      await ensureSqliteLecturesLinkUrl(pool);
+      // Чтобы `POST /api/auth/login` всегда работал с дефолтным admin/ADMIN_PASSWORD (для SQLite/Dev).
+      await ensureAdminUser(pool);
       await runMigrations(pool);
     } catch (e) {
       console.error('Миграции БД:', e.message);
