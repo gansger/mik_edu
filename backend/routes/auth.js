@@ -7,13 +7,15 @@ import { authRequired } from '../middleware/auth.js';
 const router = Router();
 
 router.post('/login', async (req, res) => {
-  const { login, password } = req.body;
+  const password = req.body?.password;
+  const loginOrEmail = req.body?.login ?? req.body?.email;
+  const login = typeof loginOrEmail === 'string' ? loginOrEmail.trim() : '';
   if (!login || !password) {
-    return res.status(400).json({ error: 'Укажите логин и пароль' });
+    return res.status(400).json({ error: 'Укажите логин (или email) и пароль' });
   }
   const r = await pool.query(
     'SELECT id, login, password_hash, role, full_name, group_id FROM users WHERE login = $1',
-    [login.trim()]
+    [login]
   );
   const user = r.rows[0];
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
