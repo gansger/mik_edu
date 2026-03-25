@@ -44,6 +44,20 @@ docker compose build --no-cache frontend
 docker compose up -d --force-recreate
 ```
 
+## 502 Bad Gateway (nginx)
+
+Обычно nginx не достучался до **backend**. Проверьте:
+
+```bash
+docker compose ps
+docker compose logs --tail=100 backend
+docker compose exec frontend curl -fsS http://backend:8000/health
+```
+
+Если `curl` из контейнера `frontend` не отвечает — backend не в той же сети или не слушает `:8000`. После смены `docker-compose.yml` (сеть `mik_edu`) пересоздайте контейнеры: `docker compose up -d --force-recreate`.
+
+Конфиг nginx **внутри** образа фронта — только **`frontend/nginx.conf`**. Файл **`nginx.edge-proxy.example.conf`** в корне — отдельный пример внешнего прокси; не подменяйте им `default.conf` в контейнере фронта (иначе возможен proxy на самого себя и снова 502).
+
 ## Полезные команды
 
 | Действие | Команда |

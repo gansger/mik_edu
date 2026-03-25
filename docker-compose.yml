@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: mik-edu-backend
     restart: unless-stopped
+    networks: [mik_edu]
     ports:
       - "8000:8000"
     env_file:
@@ -34,12 +35,17 @@ services:
       dockerfile: Dockerfile
     container_name: mik-edu-frontend
     restart: unless-stopped
+    networks: [mik_edu]
     # nginx внутри контейнера слушает 80 (см. frontend/nginx.conf)
     ports:
       - "80:80"
     depends_on:
       backend:
         condition: service_healthy
+
+networks:
+  mik_edu:
+    driver: bridge
 
 volumes:
   backend_data:
